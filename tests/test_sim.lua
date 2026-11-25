@@ -1,0 +1,315 @@
+-- Symulacja wyścigu z atrapą API CSP: sprawdza, że skrypt przechodzi przez wszystkie fazy
+-- bez błędów i podejmuje właściwe decyzje. Uruchom: luajit tests/test_sim.lua
+
+local pass, fail = 0, 0
+local function check(name, cond)
+  if cond then pass = pass + 1 else fail = fail + 1; print('FAIL: ' .. name) end
+end
+
+---------------------------------------------------------------- atrapy typów
+local vec3mt = {}
+vec3mt.__index = vec3mt
+function vec3(x, y, z) return setmetatable({ x = x or 0, y = y or 0, z = z or 0 }, vec3mt) end
+vec3mt.__add = function(a, b) return vec3(a.x + b.x, a.y + b.y, a.z + b.z) end
+vec3mt.__sub = function(a, b) return vec3(a.x - b.x, a.y - b.y, a.z - b.z) end
+vec3mt.__mul = function(a, b)
+  if type(a) == 'number' then a, b = b, a end
+  return vec3(a.x * b, a.y * b, a.z * b)
+end
+vec3mt.__unm = function(a) return vec3(-a.x, -a.y, -a.z) end
+function vec3mt:clone() return vec3(self.x, self.y, self.z) end
+function vec3mt:normalize()
+  local l = math.sqrt(self.x ^ 2 + self.y ^ 2 + self.z ^ 2)
+  if l > 0 then self.x, self.y, self.z = self.x / l, self.y / l, self.z / l end
+  return self
+end
+local vec2mt = {}
+vec2mt.__index = vec2mt
+function vec2(x, y) return setmetatable({ x = x or 0, y = y or 0 }, vec2mt) end
+vec2mt.__add = function(a, b) return vec2(a.x + b.x, a.y + b.y) end
+vec2mt.__sub = function(a, b) return vec2(a.x - b.x, a.y - b.y) end
+rgbm = setmetatable({ colors = { white = 'W', red = 'R', yellow = 'Y', green = 'G' } },
+  { __call = function(_, r, g, b, m) return { r, g, b, m } end })
+bit = require('bit')
+
+---------------------------------------------------------------- tor i auta
+local TRACK = 1000
+local R = TRACK / (2 * math.pi)
+local function posOnTrack(s, latOff)
+  local a = 2 * math.pi * s
+  local p = vec3(R * math.cos(a), 0, R * math.sin(a))
+  local look = vec3(-math.sin(a), 0, math.cos(a))
+  local side = vec3(math.cos(a), 0, math.sin(a))
+  return p + side * (latOff or 0), look, side
+end
+
+local function makeCar(index, s, lat)
+  local c = { index = index, splinePosition = s, speedKmh = 0, isConnected = true, isInPitlane = false,
+    racePosition = index + 1, sessionID = index + 10, aabbSize = vec3(2, 1.2, 4.6), lat = lat or 0 }
+  c.position, c.look, c.side = posOnTrack(s, c.lat)
+  return c
+end
+local function moveCar(c, s, speed)
+  c.splinePosition = s % 1
+  c.speedKmh = speed
+  c.position, c.look, c.side = posOnTrack(c.splinePosition, c.lat)
+end
+
+---------------------------------------------------------------- środowisko CSP
+local env
+local function setup(serverCfg)
+  env = {
+    cars = { [0] = makeCar(0, 0.980, -1.5), [1] = makeCar(1, 0.975, 1.5) },
+    sim = { raceSessionType = 3, currentSessionTime = -10000, timeToSessionStart = 10000, carsCount = 2,
+      trackLengthM = TRACK, currentSessionIndex = 2, gameTime = 0, isAdmin = true, windowWidth = 1920, windowHeight = 1080 },
+    penalties = {}, chats = {}, throttle = 0, brakes = 0, extras = {}, events = {}, buttons = {},
+    welcome = nil,
+  }
+  ac = {
+    getSim = function() return env.sim end,
+    getCar = function(i) return env.cars[i] end,
+    getDriverName = function(i) return 'Kierowca' .. i end,
+    getUI = function() return { uiScale = 1 } end,
+    log = function() end,
+    debug = function() end,
+    sendChatMessage = function(m) env.chats[#env.chats + 1] = m; return true end,
+    onOnlineWelcome = function(cb) env.welcome = cb end,
+    onSessionStart = function(cb) env.sessionStart = cb end,
+    SessionType = { Race = 3 },
+    PenaltyType = { MandatoryPits = 1, TeleportToPits = 2 },
+    SharedNamespace = { ServerScript = 'server_script' },
+    StructItem = setmetatable({}, { __index = function() return function() return 0 end end }),
+    OnlineEvent = function(layout, cb)
+      local ev = { cb = cb }
+      env.events[#env.events + 1] = ev
+      return function(data)
+        -- pętla zwrotna: wiadomość wraca do nadawcy (jak w CSP)
+        cb(env.cars[0], data)
+        return true
+      end
+    end,
+  }
+  physics = {
+    setCarPenalty = function(t, p) env.penalties[#env.penalties + 1] = { t, p } end,
+    forceUserThrottleFor = function() env.throttle = env.throttle + 1 end,
+    forceUserBrakesFor = function() env.brakes = env.brakes + 1 end,
+    raycastTrack = function() return 2.0 end,
+  }
+  render = setmetatable({ BlendMode = {}, DepthMode = {}, CullMode = {} },
+    { __index = function() return function() end end })
+  ui = setmetatable({
+    Icons = {}, OnlineExtraFlags = { None = 0, Admin = 1, Tool = 2 }, WindowFlags = { None = 0 },
+    measureDWriteText = function(t, s) return vec2(#t * s * 0.5, s) end,
+    registerOnlineExtra = function(icon, title, avail, uiCb, closeCb, flags)
+      env.extras[#env.extras + 1] = { title = title, ui = uiCb, close = closeCb, flags = flags }
+    end,
+    button = function(label) return env.buttons[label] == true end,
+    drawCircleFilled = function() env.circles = (env.circles or 0) + 1 end,
+  }, { __index = function() return function() end end })
+  script = {}
+  dofile('fr_standing_start.lua')
+  serverCfg = serverCfg or {}
+  if serverCfg.HOLD_MIN_MS == nil then serverCfg.HOLD_MIN_MS = 1000; serverCfg.HOLD_MAX_MS = 1000 end
+  do
+    env.welcome('', { get = function(_, section, key, def)
+      if section == 'FR_STANDING_START' and serverCfg[key] ~= nil then return serverCfg[key] end
+      return def
+    end })
+  end
+end
+
+local function frame(dtMs)
+  env.sim.currentSessionTime = env.sim.currentSessionTime + dtMs
+  if env.sim.timeToSessionStart > 0 then
+    env.sim.timeToSessionStart = math.max(0, env.sim.timeToSessionStart - dtMs)
+  end
+  env.sim.gameTime = env.sim.gameTime + dtMs / 1000
+  script.update(dtMs / 1000)
+  script.drawUI()
+  script.draw3D()
+end
+
+local function adminPanel()
+  for _, e in ipairs(env.extras) do if e.flags == 3 then return e end end
+end
+local function press(label)
+  env.buttons = { [label] = true }
+  adminPanel().ui()
+  env.buttons = {}
+end
+
+-- przejazd okrążenia formującego: auto jedzie od pola dookoła i staje z przesunięciem `stopOffset` m
+local function driveFormation(stopOffset, speed)
+  local me = env.cars[0]
+  local slotS = 0.980
+  local target = slotS + 1 + stopOffset / TRACK
+  local s = slotS
+  local v = speed or 70
+  while s < target do
+    local remaining = (target - s) * TRACK
+    local vv = remaining < 30 and math.max(5, remaining * 2) or v
+    s = math.min(target, s + vv / 3.6 * 0.05 / TRACK)
+    moveCar(me, s, vv)
+    frame(50)
+  end
+  moveCar(me, target, 0)
+  for _ = 1, 10 do frame(50) end
+end
+
+local function runLights(moveAtMsBeforeOut)
+  press('Zapal światła')
+  local me = env.cars[0]
+  local moved = false
+  for _ = 1, 400 do
+    frame(50)
+    if moveAtMsBeforeOut and not moved and env.t0outAt == nil then end
+    -- ruch auta przed zgaszeniem (falstart)
+    if moveAtMsBeforeOut and not moved then
+      local remaining = (env.sim._outAt or math.huge) - env.sim.currentSessionTime
+      if remaining <= moveAtMsBeforeOut then
+        moved = true
+        moveCar(me, me.splinePosition + 1.0 / TRACK, 8)
+      end
+    end
+  end
+end
+
+---------------------------------------------------------------- scenariusz 1: czysty start
+setup({ AUTO_LIGHTS = 0 })
+for _ = 1, 20 do frame(50) end -- przed startem
+check('S1: panel admina zarejestrowany', adminPanel() ~= nil)
+-- start z gry
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+-- jazda za szybko na formującym
+moveCar(env.cars[0], 0.99, 120)
+frame(50)
+check('S1: limit prędkości na formującym', env.throttle > 0 and env.brakes > 0)
+driveFormation(0.2)
+-- czas zgaszenia świateł znamy dopiero po komendzie, więc tu bez falstartu
+press('Zapal światła')
+for _ = 1, 165 do frame(50) end
+check('S1: brak kary przy czystym starcie', #env.penalties == 0)
+-- reakcja: auto rusza po zgaszeniu
+local me = env.cars[0]
+moveCar(me, me.splinePosition + 2 / TRACK, 15)
+frame(50)
+local reaction = false
+for _, m in ipairs(env.chats) do if m:find('reakcja') then reaction = true end end
+check('S1: czas reakcji na czacie', reaction)
+
+---------------------------------------------------------------- scenariusz 2: przestrzelone pole
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(3.0)
+press('Zapal światła')
+for _ = 1, 300 do frame(50) end
+check('S2: kara drive-through za przestrzelenie', #env.penalties == 1 and env.penalties[1][1] == 1 and env.penalties[1][2] == 3)
+local over = false
+for _, m in ipairs(env.chats) do if m:find('przestrzelone') then over = true end end
+check('S2: wpis na czacie o przestrzeleniu', over)
+
+---------------------------------------------------------------- scenariusz 3: ostrzeżenie 1.5 m bez kary
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(1.5)
+press('Zapal światła')
+for _ = 1, 300 do frame(50) end
+check('S3: 1.5 m = tylko ostrzeżenie', #env.penalties == 0)
+
+---------------------------------------------------------------- scenariusz 4: falstart
+setup({ JUMP_START_PENALTY = 'TELEPORT', TELEPORT_SECONDS = 7, LANGUAGE = 'EN' })
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+press('Start lights')
+-- po 2 s (świeci już kilka świateł) auto rusza o 1 m
+for _ = 1, 100 do frame(50) end
+moveCar(env.cars[0], env.cars[0].splinePosition + 1.0 / TRACK, 6)
+for _ = 1, 300 do frame(50) end
+check('S4: kara teleport za falstart', #env.penalties == 1 and env.penalties[1][1] == 2 and env.penalties[1][2] == 7)
+local jump = false
+for _, m in ipairs(env.chats) do if m:find('jump start') then jump = true end end
+check('S4: wpis na czacie po angielsku', jump)
+
+---------------------------------------------------------------- scenariusz 5: przerwany start i anulowanie kary
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(3.0)
+-- admin anuluje karę (target = sessionID auta 0 = 10)
+env.buttons = { ['Anuluj karę##p0'] = true }
+adminPanel().ui()
+env.buttons = {}
+press('Zapal światła')
+for _ = 1, 300 do frame(50) end
+check('S5: anulowana kara nie została nałożona', #env.penalties == 0)
+
+---------------------------------------------------------------- scenariusz 6: przerwanie startu
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+press('Zapal światła')
+for _ = 1, 40 do frame(50) end
+press('Przerwij start (dodatkowe formujące)')
+for _ = 1, 300 do frame(50) end
+check('S6: po przerwaniu nie ma startu ani kary', #env.penalties == 0 and #env.chats == 0)
+-- drugie formujące i start
+driveFormation(0.1)
+press('Zapal światła')
+for _ = 1, 165 do frame(50) end
+moveCar(env.cars[0], env.cars[0].splinePosition + 2 / TRACK, 15)
+frame(50)
+check('S6: start po dodatkowym okrążeniu', #env.chats >= 1 and #env.penalties == 0)
+
+---------------------------------------------------------------- scenariusz 7: start z alei, wyjazd za wcześnie
+setup(nil)
+env.cars[0].isInPitlane = true
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+press('Pomiń formujące (test)')
+press('Zapal światła')
+for _ = 1, 80 do frame(50) end
+env.cars[0].isInPitlane = false
+for _ = 1, 300 do frame(50) end
+check('S7: wyjazd z alei przed zgaszeniem = kara', #env.penalties == 1)
+
+---------------------------------------------------------------- scenariusz 8: automat świateł
+setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 2 })
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+-- drugie auto melduje się jako stojące na polu
+env.events[1].cb(env.cars[1], { state = 4, offsetCm = 0, pending = 0 })
+driveFormation(0.0)
+local waited, seen = 0, false
+while waited < 800 do
+  env.circles = 0
+  frame(50); waited = waited + 1
+  if env.circles > 0 then seen = true end
+  if seen and env.circles == 0 then break end -- światła zgasły
+end
+moveCar(env.cars[0], env.cars[0].splinePosition + 2 / TRACK, 15)
+frame(50)
+local reacted = false
+for _, m in ipairs(env.chats) do if m:find('reakcja') then reacted = true end end
+check('S8: automat zapalił światła sam', reacted)
+
+---------------------------------------------------------------- scenariusz 9: skrypt wczytany po starcie
+setup(nil)
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+env.sim.currentSessionTime = 60000
+for _ = 1, 20 do frame(50) end
+check('S9: późne wczytanie bez błędów i kar', #env.penalties == 0)
+
+print(string.format('symulacja: pass=%d fail=%d', pass, fail))
+os.exit(fail == 0 and 0 or 1)
