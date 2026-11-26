@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.5'
+local VERSION = '0.1.6'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -895,10 +895,11 @@ end
 
 -- Rysowanie pola na torze -------------------------------------------------------
 
-local COL_OK = rgbm(0.1, 1, 0.25, 0.55)
-local COL_NEAR = rgbm(1, 0.8, 0.05, 0.55)
-local COL_BAD = rgbm(1, 0.1, 0.05, 0.6)
-local COL_IDLE = rgbm(0.2, 0.6, 1, 0.45)
+-- kolory świecące (wartości > 1 = jaśniej niż biel, widać z daleka i w deszczu)
+local COL_OK = rgbm(0.2, 3, 0.4, 0.8)
+local COL_NEAR = rgbm(3, 2.2, 0.1, 0.8)
+local COL_BAD = rgbm(3, 0.2, 0.1, 0.85)
+local COL_IDLE = rgbm(0.3, 1.6, 3.5, 0.8)
 
 local function slotColor()
   local st = me.state
@@ -916,7 +917,7 @@ local function band(a, b, dirSide, w, col)
 end
 
 local function bright(col, k)
-  return rgbm(math.min(col.r * k, 4), math.min(col.g * k, 4), math.min(col.b * k, 4), 1)
+  return rgbm(math.min(col.r * k, 8), math.min(col.g * k, 8), math.min(col.b * k, 8), 1)
 end
 
 function script.draw3D()
@@ -935,7 +936,13 @@ function script.draw3D()
   render.setDepthMode(render.DepthMode.ReadOnlyLessEqual)
   render.setCullMode(render.CullMode.None)
   local col = slotColor()
-  local edge = bright(col, 2.5)
+  -- z daleka pole pulsuje, żeby łatwiej je było wypatrzyć
+  local far = me.dist and me.dist < -25
+  if far then
+    local k = 0.65 + 0.35 * math.sin(sim.gameTime * 6)
+    col = rgbm(col.r * k, col.g * k, col.b * k, col.mult)
+  end
+  local edge = bright(col, 2)
   -- wypełnienie pola
   render.quad(base + b + l, base + b + r, base + f + r, base + f + l, col)
   -- gruba obwódka (25 cm)
@@ -945,11 +952,14 @@ function script.draw3D()
   band(base + b + l, base + b + r, look, t, edge)
   -- linia przodu pola: tu ma być przód auta (biała, gruba)
   band(base + f + l, base + f + r, look, 0.35, rgbm(4, 4, 4, 1))
-  -- słupki na przednich narożnikach, widoczne z daleka
-  local up = vec3(0, 1.2, 0)
+  -- brama nad przodem pola: dwa wysokie słupki i poprzeczka, widoczne z daleka
+  local up = vec3(0, 3.2, 0)
   for _, corner in ipairs({ base + f + l, base + f + r }) do
-    band(corner, corner + up, look, 0.12, rgbm(4, 4, 4, 1))
+    band(corner, corner + up, look, 0.18, edge)
+    band(corner, corner + up, side, 0.18, edge)
   end
+  band(base + f + l + up, base + f + r + up, look, 0.25, edge)
+  band(base + f + l + up, base + f + r + up, vec3(0, 1, 0), 0.25, edge)
   -- granica kary za przestrzelenie (czerwona)
   local w = look * (halfL + cfg.GRID_WARNING_M)
   band(base + w + l, base + w + r, look, 0.3, rgbm(4, 0.2, 0.1, 1))
@@ -959,7 +969,7 @@ function script.draw3D()
     local to = base + look * L.clamp(me.long or 0, -halfL, halfL)
     band(from, to, look, 0.3, rgbm(4, 3, 0.2, 1))
   end
-  pcall(render.debugText, base + look * halfL + vec3(0, 1.6, 0), 'P' .. tostring(s.gridPos), rgbm(1, 1, 1, 1), 2.5)
+  pcall(render.debugText, base + look * halfL + vec3(0, 3.7, 0), 'P' .. tostring(s.gridPos), rgbm(4, 4, 4, 1), 3.5)
   render.setCullMode(render.CullMode.Back)
   render.setDepthMode(render.DepthMode.Normal)
   render.setBlendMode(render.BlendMode.Opaque)

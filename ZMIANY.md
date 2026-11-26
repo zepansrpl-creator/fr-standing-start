@@ -1,5 +1,11 @@
 # Zmiany
 
+## 0.1.6
+
+### Nowe funkcje
+- Pole jaśniejsze i świecące; z daleka pulsuje.
+- Brama nad przodem pola (słupki 3,2 m i poprzeczka) z numerem pola – widać z daleka, gdzie stanąć.
+
 ## 0.1.5
 
 ### Nowe funkcje
