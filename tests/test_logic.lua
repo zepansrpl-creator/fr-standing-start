@@ -116,5 +116,15 @@ for k, v in pairs(L.TEXT.PL) do
   end
 end
 
+-- lista reakcji
+local txt = L.formatReactions('PL', {
+  { name = 'B', slot = 2, ms = 300 }, { name = 'A', slot = 1, ms = 210 },
+  { name = 'C', slot = 3, jump = true, jumpMs = 90 }, { name = 'D', slot = 4, pit = true },
+}, 'Tytuł')
+check('lista: tytuł pogrubiony', txt:find('^%*%*Tytuł%*%*') ~= nil)
+check('lista: kolejność wg czasu', txt:find('1%. A %(P1%) – 0%.210 s') and txt:find('2%. B %(P2%) – 0%.300 s'))
+check('lista: falstart', txt:find('C %(P3%) – FALSTART %(90 ms') ~= nil)
+check('lista: start z alei', txt:find('D %(P4%) – start z alei') ~= nil)
+
 print(string.format('logika: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

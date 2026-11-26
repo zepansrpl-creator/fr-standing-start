@@ -1,5 +1,10 @@
 # Zmiany
 
+## 0.1.7
+
+### Nowe funkcje
+- Lista czasów reakcji wszystkich kierowców w panelu admina, z przyciskiem kopiowania gotowej listy na Discord (także komenda `!frss reakcje`).
+
 ## 0.1.6
 
 ### Nowe funkcje

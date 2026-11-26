@@ -77,6 +77,8 @@ local function setup(serverCfg)
     onSessionStart = function(cb) env.sessionStart = cb end,
     onChatMessage = function(cb) env.chatCb = cb end,
     checkAdminPrivileges = function() return true end,
+    setClipboardText = function(t) env.clipboard = t end,
+    getTrackName = function() return 'Silverstone' end,
     SessionType = { Race = 3 },
     PenaltyType = { MandatoryPits = 1, TeleportToPits = 2 },
     SharedNamespace = { ServerScript = 'server_script' },
@@ -396,7 +398,7 @@ driveFormation(0.0)
 -- komenda od innego auta (admin = auto 1), a zegar sesji tego klienta „uciekł” o 5 s
 env.sim.currentSessionTime = env.sim.currentSessionTime + 5000
 env.cars[0].ping = 80
-env.events[2].cb(env.cars[1], { cmd = 1, t0 = 0, hold = 1000, target = -1 })
+env.events[3].cb(env.cars[1], { cmd = 1, t0 = 0, hold = 1000, target = -1 })
 env.red = 0; frame(50)
 check('S15: zaraz po komendzie żadne światło nie świeci', env.red == 0)
 local litAt
@@ -433,6 +435,28 @@ for _, offset in ipairs({ 1.0, -1.0 }) do
 end
 -- auto przesunięte w stronę +side (w lewo) → ma jechać w prawo, i odwrotnie
 check('S16: strzałki w przeciwne strony', dirs[1] == 'R' and dirs[2] == 'L')
+
+---------------------------------------------------------------- scenariusz 17: lista czasów reakcji dla admina
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+press('Zapal światła')
+for _ = 1, 165 do frame(50) end
+moveCar(env.cars[0], env.cars[0].splinePosition + 2 / TRACK, 15)
+frame(50)
+-- czas reakcji drugiego kierowcy i falstart trzeciego przychodzą zdarzeniem
+env.events[2].cb(env.cars[1], { ms = 180, slot = 2, flags = 0 })
+env.cars[2] = makeCar(2, 0.97, -1.5); env.sim.carsCount = 3
+env.events[2].cb(env.cars[2], { ms = 120, slot = 3, flags = 1 })
+env.chatCb('!frss reakcje', 0, 10)
+local clip = env.clipboard or ''
+check('S17: lista skopiowana', clip:find('Czasy reakcji') ~= nil)
+check('S17: najszybszy pierwszy', clip:find('1%. Kierowca1 %(P2%) – 0%.180 s') ~= nil)
+check('S17: falstart na końcu', clip:find('Kierowca2 %(P3%) – FALSTART') ~= nil)
+adminPanel().ui()
+check('S17: panel z listą bez błędów', true)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

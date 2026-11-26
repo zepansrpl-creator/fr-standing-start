@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.6'
+local VERSION = '0.1.7'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -244,6 +244,14 @@ L.TEXT = {
       'za daleko', 'PRZESTRZELIŁ (kara)', 'aleja serwisowa', 'brak pola', 'wyścig', 'spóźniony', 'obok pola',
     },
     pending = 'kara czeka',
+    listTitle = 'Czasy reakcji – %s – %s',
+    listJump = 'FALSTART (%d ms za wcześnie)',
+    listLate = 'nie stał na polu',
+    listPit = 'start z alei',
+    listNone = 'brak pomiaru',
+    btnCopy = 'Kopiuj czasy reakcji (Discord)',
+    copied = 'Skopiowano – wklej na Discordzie (Ctrl+V)',
+    reactHeader = 'Czasy reakcji (%d):',
     wrongLane = 'STAŃ NA ŚRODKU POLA – jesteś obok o %.1f m',
     moveLeft = '← W LEWO o %.1f m',
     moveRight = 'W PRAWO o %.1f m →',
@@ -311,6 +319,14 @@ L.TEXT = {
       'too far', 'OVERSHOT (penalty)', 'pit lane', 'no slot', 'race', 'late', 'beside slot',
     },
     pending = 'penalty pending',
+    listTitle = 'Reaction times – %s – %s',
+    listJump = 'JUMP START (%d ms early)',
+    listLate = 'not in slot',
+    listPit = 'pit lane start',
+    listNone = 'no measurement',
+    btnCopy = 'Copy reaction times (Discord)',
+    copied = 'Copied – paste it on Discord (Ctrl+V)',
+    reactHeader = 'Reaction times (%d):',
     wrongLane = 'MOVE TO THE CENTRE OF THE SLOT – you are %.1f m off',
     moveLeft = '← LEFT by %.1f m',
     moveRight = 'RIGHT by %.1f m →',
@@ -339,6 +355,30 @@ L.TEXT = {
 function L.text(lang, key)
   local t = L.TEXT[lang] or L.TEXT.PL
   return t[key] or L.TEXT.PL[key] or key
+end
+
+-- Lista czasów reakcji do wklejenia na Discord.
+-- entries: { name, slot, ms (nil gdy brak), jump (bool), jumpMs, pit (bool), late (bool) }
+function L.formatReactions(lang, entries, title)
+  local ok, rest = {}, {}
+  for _, e in ipairs(entries) do
+    if e.ms and not e.jump and not e.late then ok[#ok + 1] = e else rest[#rest + 1] = e end
+  end
+  table.sort(ok, function(a, b) return a.ms < b.ms end)
+  table.sort(rest, function(a, b) return (a.slot or 99) < (b.slot or 99) end)
+  local lines = { '**' .. title .. '**' }
+  for i, e in ipairs(ok) do
+    lines[#lines + 1] = string.format('%d. %s (P%d) – %.3f s', i, e.name, e.slot or 0, e.ms / 1000)
+  end
+  for _, e in ipairs(rest) do
+    local why
+    if e.jump then why = string.format(L.text(lang, 'listJump'), e.jumpMs or 0)
+    elseif e.late then why = L.text(lang, 'listLate')
+    elseif e.pit then why = L.text(lang, 'listPit')
+    else why = L.text(lang, 'listNone') end
+    lines[#lines + 1] = string.format('– %s (P%d) – %s', e.name, e.slot or 0, why)
+  end
+  return table.concat(lines, '\n')
 end
 
 function L.penaltyName(lang, pen)
@@ -441,6 +481,32 @@ local sendStatus = ac.OnlineEvent({
   if not sender then return end
   statuses[sender.index] = { state = data.state, offsetCm = data.offsetCm, pending = data.pending, at = gameS() }
 end, ac.SharedNamespace.ServerScript)
+
+-- Czasy reakcji wszystkich kierowców (zbiera każdy klient, lista w panelu admina)
+local reactions = {} -- [carIndex] = { name, slot, ms, jump, jumpMs, pit, late }
+
+local sendReaction = ac.OnlineEvent({
+  key = ac.StructItem.key('frss_react_v1'),
+  ms = ac.StructItem.int32(),
+  slot = ac.StructItem.int16(),
+  flags = ac.StructItem.byte(),
+}, function(sender, data)
+  if not sender then return end
+  local f = data.flags
+  reactions[sender.index] = {
+    name = ac.getDriverName(sender.index) or '?',
+    slot = data.slot,
+    ms = (f == 0) and data.ms or nil,
+    jump = f % 2 == 1, jumpMs = data.ms,
+    pit = math.floor(f / 2) % 2 == 1,
+    late = math.floor(f / 4) % 2 == 1,
+  }
+end, ac.SharedNamespace.ServerScript)
+
+local function reportReaction(ms, jump, pit, late)
+  local flags = (jump and 1 or 0) + (pit and 2 or 0) + (late and 4 or 0)
+  sendReaction({ ms = math.floor(ms or 0), slot = mySlotNumber(), flags = flags })
+end
 
 local onCommand -- zdefiniowane niżej
 
@@ -545,6 +611,7 @@ end
 local function startLights(t0, hold)
   if phase ~= L.P.FORMATION then return end
   phase = L.P.LIGHTS
+  reactions = {}
   lightsT0, lightsHold = t0, hold
   local _, _, outAt = L.lightsState(clockMs(), t0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, hold)
   lightsOutAt = outAt
@@ -581,6 +648,9 @@ local function finishStart()
   if me.late then
     chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name))
   end
+  if me.jumpMs then reportReaction(me.jumpMs, true, me.pitStart, false)
+  elseif me.late then reportReaction(0, false, false, true)
+  elseif me.pitStart or not slots[0] then reportReaction(0, false, true, false) end
   applyPenalty(pen)
   me.pending = nil
   me.state = L.S.RACING
@@ -649,10 +719,13 @@ end)
 local adminByChat = false
 local function isAdmin() return sim.isAdmin or adminByChat end
 
+local copyReactions -- zdefiniowane niżej (panel admina)
+
 L.CHAT_COMMANDS = {
   swiatla = L.CMD.LIGHTS, ['światła'] = L.CMD.LIGHTS, lights = L.CMD.LIGHTS,
   przerwij = L.CMD.ABORT, abort = L.CMD.ABORT,
   pomin = L.CMD.SKIP_FORMATION, ['pomiń'] = L.CMD.SKIP_FORMATION, skip = L.CMD.SKIP_FORMATION,
+  reakcje = 'copy', reactions = 'copy',
 }
 
 ac.onChatMessage(function(message, senderCarIndex)
@@ -671,7 +744,8 @@ ac.onChatMessage(function(message, senderCarIndex)
   if cmd then
     if senderCarIndex == 0 and isAdmin() then
       local c = L.CHAT_COMMANDS[cmd:lower()]
-      if c then adminSend(c) end
+      if c == 'copy' then copyReactions()
+      elseif c then adminSend(c) end
     end
     return true -- ukryj komendę na czacie u wszystkich
   end
@@ -816,6 +890,7 @@ local function updateRacing(frameDt)
   if moved > 0.3 then
     me.reactionMs = math.floor(clockMs() - lightsOutAt)
     notify(T('reaction', me.reactionMs), 5, rgbm.colors.green)
+    if not me.pitStart then reportReaction(me.reactionMs, false, false, false) end
     if cfg.REPORT_REACTION == 1 and not me.pitStart then
       chat(string.format(T('chatReaction'), cfg.CHAT_PREFIX .. 'R', mySlotNumber(), myName(), me.reactionMs))
     end
@@ -1110,6 +1185,20 @@ end
 
 -- Panel admina i przełącznik języka ----------------------------------------------
 
+local function reactionText()
+  local list = {}
+  for _, e in pairs(reactions) do list[#list + 1] = e end
+  local track = (pcall(ac.getTrackName) and ac.getTrackName()) or ''
+  local title = string.format(L.text(lang, 'listTitle'), track, os.date('%d.%m.%Y %H:%M'))
+  return L.formatReactions(lang, list, title), #list
+end
+
+copyReactions = function()
+  local text = reactionText()
+  if not pcall(ac.setClipboardText, text) then pcall(ui.setClipboardText, text) end
+  pcall(ui.toast, ui.Icons.Copy or ui.Icons.Settings, T('copied'))
+end
+
 local function stateName(st)
   local names = L.text(lang, 'stateNames')
   return names[st] or tostring(st)
@@ -1156,6 +1245,14 @@ local function adminUI()
   ui.separator()
   ui.text(T('ready', ready, total))
   ui.text(T('chatHelp'))
+  local _, count = reactionText()
+  if count > 0 then
+    ui.separator()
+    ui.text(T('reactHeader', count))
+    local text = reactionText()
+    for line in text:gmatch('[^\n]+') do ui.text(line) end
+    if ui.button(T('btnCopy')) then copyReactions() end
+  end
   return false
 end
 
