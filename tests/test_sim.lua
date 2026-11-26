@@ -75,6 +75,8 @@ local function setup(serverCfg)
     sendChatMessage = function(m) env.chats[#env.chats + 1] = m; return true end,
     onOnlineWelcome = function(cb) env.welcome = cb end,
     onSessionStart = function(cb) env.sessionStart = cb end,
+    onChatMessage = function(cb) env.chatCb = cb end,
+    checkAdminPrivileges = function() return true end,
     SessionType = { Race = 3 },
     PenaltyType = { MandatoryPits = 1, TeleportToPits = 2 },
     SharedNamespace = { ServerScript = 'server_script' },
@@ -130,7 +132,7 @@ local function frame(dtMs)
 end
 
 local function adminPanel()
-  for _, e in ipairs(env.extras) do if e.flags == 3 then return e end end
+  for _, e in ipairs(env.extras) do if e.flags == 2 then return e end end
 end
 local function press(label)
   env.buttons = { [label] = true }
@@ -310,6 +312,26 @@ env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 env.sim.currentSessionTime = 60000
 for _ = 1, 20 do frame(50) end
 check('S9: późne wczytanie bez błędów i kar', #env.penalties == 0)
+
+---------------------------------------------------------------- scenariusz 10: admin po /admin i komenda na czacie
+setup(nil)
+env.sim.isAdmin = false
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+local hidden = env.chatCb('!frss swiatla', 0, 10)
+check('S10: komenda ukryta na czacie', hidden == true)
+for _ = 1, 200 do frame(50) end
+check('S10: bez admina komenda nic nie robi', #env.chats == 0)
+env.chatCb('You are now Admin for this server', -1, -1)
+env.chatCb('!frss swiatla', 0, 10)
+for _ = 1, 165 do frame(50) end
+moveCar(env.cars[0], env.cars[0].splinePosition + 2 / TRACK, 15)
+frame(50)
+local r10 = false
+for _, m in ipairs(env.chats) do if m:find('reakcja') then r10 = true end end
+check('S10: po /admin komenda !frss swiatla zapala światła', r10)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

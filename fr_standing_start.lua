@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.0'
+local VERSION = '0.1.1'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -227,6 +227,7 @@ L.TEXT = {
       'za daleko', 'PRZESTRZELIŁ (kara)', 'aleja serwisowa', 'brak pola', 'wyścig', 'spóźniony',
     },
     pending = 'kara czeka',
+    chatHelp = 'Czat: !frss swiatla / !frss przerwij / !frss pomin',
     noData = 'brak danych',
   },
   EN = {
@@ -273,6 +274,7 @@ L.TEXT = {
       'too far', 'OVERSHOT (penalty)', 'pit lane', 'no slot', 'race', 'late',
     },
     pending = 'penalty pending',
+    chatHelp = 'Chat: !frss lights / !frss abort / !frss skip',
     noData = 'no data',
   },
 }
@@ -563,6 +565,40 @@ ac.onSessionStart(function(index, restarted)
   sessionIndex = index
 end)
 
+-- Admin i komendy na czacie ----------------------------------------------------
+
+-- CSP ustawia sim.isAdmin tylko po zalogowaniu w nowej aplikacji czatu.
+-- Dlatego rozpoznajemy też odpowiedź serwera na komendę /admin.
+local adminByChat = false
+local function isAdmin() return sim.isAdmin or adminByChat end
+
+L.CHAT_COMMANDS = {
+  swiatla = L.CMD.LIGHTS, ['światła'] = L.CMD.LIGHTS, lights = L.CMD.LIGHTS,
+  przerwij = L.CMD.ABORT, abort = L.CMD.ABORT,
+  pomin = L.CMD.SKIP_FORMATION, ['pomiń'] = L.CMD.SKIP_FORMATION, skip = L.CMD.SKIP_FORMATION,
+}
+
+ac.onChatMessage(function(message, senderCarIndex)
+  local msg = tostring(message or '')
+  if senderCarIndex == -1 and msg:lower():find('you are now admin', 1, true) then
+    adminByChat = true
+    pcall(ac.checkAdminPrivileges)
+    log('rozpoznano admina po komendzie /admin')
+    return false
+  end
+  local cmd = msg:match('^!frss%s+(%S+)')
+  if cmd then
+    if senderCarIndex == 0 and isAdmin() then
+      local c = L.CHAT_COMMANDS[cmd:lower()]
+      if c then adminSend(c) end
+    end
+    return true -- ukryj komendę na czacie u wszystkich
+  end
+  return false
+end)
+
+pcall(ac.checkAdminPrivileges)
+
 -- Pętla główna ----------------------------------------------------------------
 
 local function updateGrid()
@@ -661,7 +697,7 @@ local function updateRacing()
 end
 
 local function updateAutoLights()
-  if cfg.AUTO_LIGHTS ~= 1 or not sim.isAdmin or phase ~= L.P.FORMATION then return end
+  if cfg.AUTO_LIGHTS ~= 1 or not isAdmin() or phase ~= L.P.FORMATION then return end
   local list, anyReady = {}, false
   for i = 0, sim.carsCount - 1 do
     local c = ac.getCar(i)
@@ -684,7 +720,19 @@ local function updateAutoLights()
   end
 end
 
+local function debugValues()
+  -- podgląd w aplikacji „Lua Debug” CSP (pomaga przy testach)
+  ac.debug('FRSS wersja', VERSION)
+  ac.debug('FRSS admin', isAdmin())
+  ac.debug('FRSS faza', phase)
+  ac.debug('FRSS stan', me.state)
+  ac.debug('FRSS przejechane m', math.floor(me.traveled or 0))
+  ac.debug('FRSS do pola m', me.dist and string.format('%.2f', me.dist) or '-')
+  ac.debug('FRSS pole P', mySlotNumber())
+end
+
 function script.update(dt)
+  debugValues()
   if sim.raceSessionType ~= ac.SessionType.Race then
     if phase ~= L.P.IDLE then phase = L.P.IDLE; me.state = L.S.NONE end
     return
@@ -717,12 +765,6 @@ function script.update(dt)
   end
 
   pushStatus(false)
-  -- podgląd w aplikacji „Lua Debug” CSP (pomaga przy testach)
-  ac.debug('FRSS faza', phase)
-  ac.debug('FRSS stan', me.state)
-  ac.debug('FRSS przejechane m', math.floor(me.traveled or 0))
-  ac.debug('FRSS do pola m', me.dist and string.format('%.2f', me.dist) or '-')
-  ac.debug('FRSS pole P', mySlotNumber())
 end
 
 -- Rysowanie pola na torze -------------------------------------------------------
@@ -892,12 +934,13 @@ local function adminUI()
   end
   ui.separator()
   ui.text(T('ready', ready, total))
+  ui.text(T('chatHelp'))
   return false
 end
 
 ui.registerOnlineExtra(ui.Icons.TrafficLight, L.text('PL', 'adminTitle'),
-  function() return true end, adminUI, nil,
-  bit.bor(ui.OnlineExtraFlags.Admin, ui.OnlineExtraFlags.Tool), ui.WindowFlags.None, vec2(420, 520))
+  function() return isAdmin() end, adminUI, nil,
+  ui.OnlineExtraFlags.Tool, ui.WindowFlags.None, vec2(420, 540))
 
 ui.registerOnlineExtra(ui.Icons.Settings, L.text('PL', 'langToggle'),
   function() return true end, nil, function(ok)

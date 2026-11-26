@@ -1,5 +1,15 @@
 # Zmiany
 
+## 0.1.1
+
+### Nowe funkcje
+- Komendy admina na czacie: `!frss swiatla`, `!frss przerwij`, `!frss pomin`.
+- Wpisy FRSS w Lua Debug widoczne w każdej sesji (łatwo sprawdzić, czy skrypt się wczytał).
+
+### Poprawki
+- Panel admina pojawia się także po zalogowaniu komendą `/admin`.
+- Instrukcja: sekcja skryptu to `[SCRIPT_...]` (poprzednia nazwa nie była wczytywana przez CSP).
+
 ## 0.1.0
 
 ### Nowe funkcje

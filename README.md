@@ -39,8 +39,8 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 1. W wyścigu (Custom Race / Championship) w polu **Extra Options** (opcje CSP) dopisz na końcu:
 
 ```ini
-[SCRIPT_FR_STANDING_START]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.0/fr_standing_start.lua"
+[SCRIPT_...]
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.1/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -53,9 +53,9 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Adres zawiera numer wersji (`v0.1.0`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.1`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
-2. **Start Rule** ustaw na blokadę aut do startu (car locked until start), żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
+2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
 4. **Real Penalty** wyłącz w tym wyścigu albo wyłącz w nim obsługę startu, żeby kary się nie dublowały.
 5. **Liczba okrążeń:** okrążenie formujące najpewniej doliczy się do 1. okrążenia. Sprawdzimy to w teście, wtedy wyścig trzeba będzie ustawić na +1 okrążenie.
@@ -87,13 +87,21 @@ AUTO_LIGHTS = 0
 
 ## Panel admina
 
-1. Wejdź na serwer jako admin (hasło admina albo logowanie admina w nowej aplikacji czatu CSP).
-2. Otwórz nową aplikację czatu CSP, kliknij ikonę żarówki (dodatki online) i wybierz **„FR Standing Start – admin”**.
+1. Zaloguj się jako admin: wpisz na czacie `/admin hasło_admina` (serwer odpowie „You are now Admin”) albo zaloguj się jako admin w nowej aplikacji czatu CSP.
+2. Otwórz nową aplikację czatu CSP, kliknij ikonę dodatków online (żarówka) i wybierz **„FR Standing Start – admin”**.
 3. Panel zostaje na ekranie. Masz w nim:
    - **Zapal światła**: działa w trakcie okrążenia formującego,
    - **Przerwij start (dodatkowe formujące)**: gasi światła, wszyscy jadą jeszcze jedno okrążenie, kary za przestrzelenie przepadają,
    - **Pomiń formujące (test)**: wszyscy są traktowani tak, jakby już zrobili formujące. Przydaje się do testów w pojedynkę,
    - **listę aut** z polem, stanem i przesunięciem w metrach oraz przyciskiem **Anuluj karę** (działa przed zgaszeniem świateł).
+
+Komendy na czacie (działają tylko dla admina, nie są widoczne dla innych):
+
+| Komenda | Działanie |
+|---|---|
+| `!frss swiatla` | zapal światła |
+| `!frss przerwij` | przerwij start (dodatkowe formujące) |
+| `!frss pomin` | pomiń formujące (test) |
 
 Każdy kierowca ma też w tym samym menu przełącznik języka **„FR Standing Start: język PL/EN”**.
 
@@ -111,7 +119,7 @@ Testy sprawdzają:
 
 ### Test 1 – sam na serwerze
 
-- [ ] Po wejściu na serwer w aplikacji **Lua Debug** CSP widać wpisy `FRSS …`, czyli skrypt się wczytał.
+- [ ] Po wejściu na serwer w **Lua Debug** CSP jest nowy „Server Script: SCRIPT_…” z wpisami `FRSS …` (w każdej sesji), czyli skrypt się wczytał.
 - [ ] Przed startem stan to `1`. Po starcie z gry faza zmienia się na `2` i pojawia się napis „OKRĄŻENIE FORMUJĄCE”.
 - [ ] Jazda powyżej 80 km/h: gaz jest odcinany.
 - [ ] Ok. 300 m przed polem pojawia się odliczanie, a na asfalcie widać pole.
