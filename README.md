@@ -1,7 +1,7 @@
 # FR Standing Start
 
 Start z miejsca po okrążeniu formującym dla serwerów Assetto Corsa (skrypt online CSP).
-*Standing start after a formation lap for Assetto Corsa servers (CSP online script) – English summary at the bottom.*
+*Standing start after a formation lap for Assetto Corsa servers (CSP online script).* **English setup guide: [GUIDE_EN.md](GUIDE_EN.md)**
 
 Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwer. Potrzebny jest tylko Custom Shaders Patch.
 
@@ -60,7 +60,7 @@ AUTO_LIGHTS = 0
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
-4. **Real Penalty** wyłącz w tym wyścigu albo wyłącz w nim obsługę startu, żeby kary się nie dublowały.
+4. **Real Penalty** może działać razem ze skryptem – nie włączaj w nim tylko startu za safety carem (start lotny), bo procedury startu by się gryzły. Kary RP za ścinanie liczą się też na okrążeniu formującym (powyżej 40 km/h).
 5. **Liczba okrążeń:** okrążenie formujące najpewniej doliczy się do 1. okrążenia. Sprawdzimy to w teście, wtedy wyścig trzeba będzie ustawić na +1 okrążenie.
 
 ### Wszystkie ustawienia `[FR_STANDING_START]`
