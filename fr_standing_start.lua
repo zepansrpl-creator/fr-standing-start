@@ -2,6 +2,7 @@
 -- Start z miejsca po okrążeniu formującym dla serwerów Assetto Corsa (skrypt online CSP).
 -- Standing start after a formation lap for Assetto Corsa servers (CSP online script).
 --
+-- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
 local VERSION = '0.1.0'

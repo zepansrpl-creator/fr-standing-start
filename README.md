@@ -155,3 +155,7 @@ Te rzeczy działają w testach na atrapie, ale ich zachowanie w grze trzeba potw
 ## English summary
 
 FR Standing Start is a CSP online script that adds a standing start after a formation lap. It records each car's grid slot at the game's race start (which begins the formation lap), enforces a speed limit, shows a distance countdown and a marked grid box on the tarmac, penalises overshooting the slot, runs synchronised start lights (admin button or automatic when everyone is stopped) and detects jump starts. Messages are available in Polish and English (`LANGUAGE = EN`, drivers can switch locally). Configure it with the `[FR_STANDING_START]` section shown above.
+
+## Licencja
+
+MIT – patrz plik [LICENSE](LICENSE). Możesz używać i przerabiać, zachowując informację o autorze.
