@@ -213,7 +213,7 @@ setup(nil)
 for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
-driveFormation(6.0)
+driveFormation(11.0)
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
 check('S2: kara drive-through za przestrzelenie', #env.penalties == 1 and env.penalties[1][1] == 1 and env.penalties[1][2] == 3)
@@ -226,10 +226,10 @@ setup(nil)
 for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
-driveFormation(4.0)
+driveFormation(8.0)
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
-check('S3: 4 m = tylko ostrzeżenie', #env.penalties == 0)
+check('S3: 8 m = tylko ostrzeżenie', #env.penalties == 0)
 
 ---------------------------------------------------------------- scenariusz 4: falstart
 setup({ JUMP_START_PENALTY = 'TELEPORT', TELEPORT_SECONDS = 7, LANGUAGE = 'EN' })
@@ -252,7 +252,7 @@ setup(nil)
 for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
-driveFormation(6.0)
+driveFormation(11.0)
 -- admin anuluje karę (target = sessionID auta 0 = 10)
 env.buttons = { ['Anuluj karę##p0'] = true }
 adminPanel().ui()
@@ -347,6 +347,7 @@ for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
 env.cars[0].lat = -1.5 + 2.6 -- stanie 2.6 m obok swojego pola
+env.cars[0].wheels = nil
 driveFormation(0.0)
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
@@ -357,7 +358,17 @@ check('S11: kara za stanie obok pola', #env.penalties == 1 and lane)
 ---------------------------------------------------------------- scenariusz 12: drive-through odbyty w alei
 -- (kontynuacja S11: kierowca ma DT)
 env.cars[0].lat = -1.5
-env.cars[0].isInPitlane = true; frame(50); frame(50)
+-- najpierw pitstop (postój w boksie) – nie zalicza kary
+local nPen = #env.penalties
+env.cars[0].isInPitlane = true; env.cars[0].speedKmh = 40; frame(50)
+env.cars[0].isInPit = true; env.cars[0].speedKmh = 0; for _ = 1, 40 do frame(50) end
+env.cars[0].isInPit = false; env.cars[0].speedKmh = 40; frame(50)
+env.cars[0].isInPitlane = false; frame(50)
+local invalid = false
+for _, m in ipairs(env.chats) do if m:find('nie zaliczył') then invalid = true end end
+check('S12: pitstop nie zalicza drive-through', invalid and #env.penalties == nPen + 1)
+-- potem przejazd bez zatrzymania
+env.cars[0].isInPitlane = true; env.cars[0].speedKmh = 60; frame(50); frame(50)
 env.cars[0].isInPitlane = false; frame(50)
 local served = false
 for _, m in ipairs(env.chats) do if m:find('drive%-through odbyty') then served = true end end
@@ -395,6 +406,33 @@ for k = 1, 200 do
 end
 -- pierwsze światło po LIGHTS_LEAD_MS (3000 ms) minus pół pingu ≈ 59–60 klatek po 50 ms
 check('S15: pierwsze światło po ok. 3 s', litAt and litAt >= 57 and litAt <= 61)
+
+---------------------------------------------------------------- scenariusz 16: strzałka w lewo/prawo
+local function wheelsFor(c)
+  -- koło 0 = przednie lewe, koło 1 = przednie prawe; „prawo” = -side w tej atrapie
+  local p, look, side = c.position, c.look, c.side
+  c.wheels = { [0] = { position = p + side * 0.8 + look * 1.3 }, [1] = { position = p - side * 0.8 + look * 1.3 } }
+end
+local dirs = {}
+for _, offset in ipairs({ 1.0, -1.0 }) do
+  setup(nil)
+  for _ = 1, 5 do frame(50) end
+  env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+  frame(50)
+  env.cars[0].lat = -1.5 + offset
+  driveFormation(0.0)
+  wheelsFor(env.cars[0])
+  local texts = {}
+  ui.dwriteDrawText = function(t) texts[#texts + 1] = t end
+  frame(50)
+  local d = '?'
+  for _, t in ipairs(texts) do
+    if t:find('W LEWO') then d = 'L' elseif t:find('W PRAWO') then d = 'R' end
+  end
+  dirs[#dirs + 1] = d
+end
+-- auto przesunięte w stronę +side (w lewo) → ma jechać w prawo, i odwrotnie
+check('S16: strzałki w przeciwne strony', dirs[1] == 'R' and dirs[2] == 'L')
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

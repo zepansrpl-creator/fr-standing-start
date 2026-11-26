@@ -1,5 +1,15 @@
 # Zmiany
 
+## 0.1.5
+
+### Nowe funkcje
+- Strzałki w komunikatach: ↑ podjedź, ↓ za daleko, ← w lewo / w prawo →.
+
+### Poprawki
+- Kara za przestrzelenie pola dopiero od 10 m.
+- Tolerancja ustawienia w bok: 0,5 m (było 1 m).
+- Drive-through zalicza tylko przejazd przez aleję bez zatrzymania; pitstop w boksie nie odbywa kary.
+
 ## 0.1.4
 
 ### Poprawki

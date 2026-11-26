@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.4'
+local VERSION = '0.1.5'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -21,8 +21,8 @@ L.DEFAULTS = {
   FORMATION_SPEED_KMH = 80,    -- limit prędkości na okrążeniu formującym (0 = brak)
   APPROACH_ZONE_M = 300,       -- od jakiej odległości pokazujemy pole i odliczanie metrów
   GRID_TOLERANCE_M = 0.5,      -- tyle można stanąć przed/za linią pola bez uwag
-  GRID_WARNING_M = 5.0,        -- przestrzelenie do tej wartości = tylko ostrzeżenie, dalej kara
-  LATERAL_TOLERANCE_M = 1.0,   -- tyle można stać obok środka pola (w lewo/prawo) bez uwag
+  GRID_WARNING_M = 10.0,       -- przestrzelenie do tej wartości = tylko ostrzeżenie, dalej kara
+  LATERAL_TOLERANCE_M = 0.5,   -- tyle można stać obok środka pola (w lewo/prawo) bez uwag
   LATERAL_PENALTY_M = 2.0,     -- stoi dalej obok pola przy zapaleniu świateł = kara jak za przestrzelenie
   ALLOW_REVERSE = 0,           -- 0: liczy się najdalszy punkt (cofanie nie kasuje przestrzelenia)
   OVERSHOOT_PENALTY = 'DRIVE_THROUGH', -- DRIVE_THROUGH / TELEPORT / WARNING
@@ -205,11 +205,11 @@ L.TEXT = {
     yourSlot = 'Twoje pole: P%d',
     pitStart = 'START Z ALEI SERWISOWEJ – wyjedź dopiero po zgaszeniu świateł',
     noSlot = 'Brak pola startowego (dołączyłeś po starcie) – startuj z alei',
-    toGo = 'P%d · %d m',
-    toGoNear = 'P%d · %.1f m',
+    toGo = 'P%d · ↑ %d m',
+    toGoNear = 'P%d · ↑ %.1f m',
     stop = 'STOP – STOISZ NA POLU',
-    short = 'Podjedź jeszcze %.1f m',
-    overshoot = 'Za daleko o %.1f m',
+    short = '↑ Podjedź jeszcze %.1f m',
+    overshoot = '↓ Za daleko o %.1f m',
     overshootPen = 'PRZESTRZELONE POLE o %.1f m – KARA',
     waitLights = 'Czekaj na światła',
     lights = 'START',
@@ -245,6 +245,10 @@ L.TEXT = {
     },
     pending = 'kara czeka',
     wrongLane = 'STAŃ NA ŚRODKU POLA – jesteś obok o %.1f m',
+    moveLeft = '← W LEWO o %.1f m',
+    moveRight = 'W PRAWO o %.1f m →',
+    penStopInvalid = 'Postój w boksie nie zalicza drive-through – przejedź aleję bez zatrzymania',
+    chatStopInvalid = '%s %s: postój w boksie nie zaliczył drive-through',
     chatLane = '%s P%d %s: stał obok pola (%.1f m) → %s',
     penDTInfo = 'DRIVE-THROUGH: przejedź przez aleję serwisową – zostało okrążeń: %d',
     penDTLast = 'DRIVE-THROUGH: OSTATNIE OKRĄŻENIE na odbycie kary!',
@@ -269,11 +273,11 @@ L.TEXT = {
     yourSlot = 'Your grid slot: P%d',
     pitStart = 'PIT LANE START – leave only after the lights go out',
     noSlot = 'No grid slot (joined after the start) – start from the pit lane',
-    toGo = 'P%d · %d m',
-    toGoNear = 'P%d · %.1f m',
+    toGo = 'P%d · ↑ %d m',
+    toGoNear = 'P%d · ↑ %.1f m',
     stop = 'STOP – YOU ARE IN YOUR SLOT',
-    short = 'Move up %.1f m',
-    overshoot = 'Too far by %.1f m',
+    short = '↑ Move up %.1f m',
+    overshoot = '↓ Too far by %.1f m',
     overshootPen = 'GRID SLOT OVERSHOT by %.1f m – PENALTY',
     waitLights = 'Wait for the lights',
     lights = 'START',
@@ -308,6 +312,10 @@ L.TEXT = {
     },
     pending = 'penalty pending',
     wrongLane = 'MOVE TO THE CENTRE OF THE SLOT – you are %.1f m off',
+    moveLeft = '← LEFT by %.1f m',
+    moveRight = 'RIGHT by %.1f m →',
+    penStopInvalid = 'A pit stop does not serve a drive-through – drive through the pit lane without stopping',
+    chatStopInvalid = '%s %s: pit stop did not serve the drive-through',
     chatLane = '%s P%d %s: stopped beside the slot (%.1f m) → %s',
     penDTInfo = 'DRIVE-THROUGH: drive through the pit lane – laps left: %d',
     penDTLast = 'DRIVE-THROUGH: LAST LAP to serve the penalty!',
@@ -716,6 +724,15 @@ local function updateFormation(dt)
 
   if L.isApproaching(me.traveled, trackLen, dist, cfg) then
     me.long, me.lat = dist, lat
+    -- w którą stronę do środka pola: oś „w prawo” z pozycji kół (przednie prawe − przednie lewe)
+    local wh = myCar.wheels
+    if wh and wh[0] and wh[1] then
+      local rx, rz = wh[1].position.x - wh[0].position.x, wh[1].position.z - wh[0].position.z
+      local len = math.sqrt(rx * rx + rz * rz)
+      if len > 0.1 then
+        me.toSlotRight = ((s.pos.x - myCar.position.x) * rx + (s.pos.z - myCar.position.z) * rz) / len
+      end
+    end
     if math.abs(dist) < 60 then me.maxLong = math.max(me.maxLong, dist) end
     local st = L.classifySlot(dist, me.maxLong, myCar.speedKmh, cfg, lat)
     me.state = st
@@ -759,11 +776,23 @@ local function updateLights()
   if out then finishStart() end
 end
 
-local function updateDriveThrough()
+local function updateDriveThrough(frameDt)
   local dt = me.dt
   if not dt or dt.done then return end
+  dt.frame = frameDt or 0
   if myCar.isInPitlane then
     dt.inPit = true
+    -- zatrzymanie w boksie (pitstop) nie zalicza drive-through
+    if myCar.isInPit or myCar.speedKmh < 1 then
+      dt.stopTime = (dt.stopTime or 0) + (dt.frame or 0)
+      if myCar.isInPit or dt.stopTime > 1 then dt.stopped = true end
+    end
+  elseif dt.inPit and dt.stopped then
+    dt.inPit, dt.stopped, dt.stopTime = false, false, 0
+    local left = math.max(1, L.dtLapsLeft(dt.laps, dt.startLap, myCar.lapCount))
+    physics.setCarPenalty(ac.PenaltyType.MandatoryPits, left)
+    notify(T('penStopInvalid'), 8, rgbm.colors.red)
+    chat(string.format(T('chatStopInvalid'), cfg.CHAT_PREFIX, myName()))
   elseif dt.inPit then
     dt.done = true
     notify(T('penServed'), 6, rgbm.colors.green)
@@ -778,8 +807,8 @@ local function updateDriveThrough()
   end
 end
 
-local function updateRacing()
-  updateDriveThrough()
+local function updateRacing(frameDt)
+  updateDriveThrough(frameDt)
   -- czas reakcji w pierwszych 5 s po zgaszeniu świateł
   if me.reactionMs or me.jumpMs or me.late or not me.outPos or not lightsDoneAt then return end
   if gameS() - lightsDoneAt > 5 then return end
@@ -858,7 +887,7 @@ function script.update(dt)
   elseif phase == L.P.LIGHTS then
     updateLights()
   elseif phase == L.P.RACING then
-    updateRacing()
+    updateRacing(dt)
   end
 
   pushStatus(false)
@@ -1042,7 +1071,12 @@ function script.drawUI()
       elseif st == L.S.SHORT then
         banner(T('short', -me.long), 0, 30, rgbm.colors.yellow)
       elseif st == L.S.WRONG_LANE then
-        banner(T('wrongLane', math.abs(me.lat or 0)), 0, 30, rgbm.colors.yellow)
+        local off = math.abs(me.lat or 0)
+        if me.toSlotRight then
+          banner(T(me.toSlotRight > 0 and 'moveRight' or 'moveLeft', off), 0, 34, rgbm.colors.yellow)
+        else
+          banner(T('wrongLane', off), 0, 30, rgbm.colors.yellow)
+        end
       elseif st == L.S.OVERSHOOT then
         banner(T('overshoot', me.long), 0, 30, rgbm.colors.yellow)
       elseif st == L.S.OVERSHOOT_PEN then
