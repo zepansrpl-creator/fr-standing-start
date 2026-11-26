@@ -61,7 +61,7 @@ local function setup(serverCfg)
   env = {
     cars = { [0] = makeCar(0, 0.980, -1.5), [1] = makeCar(1, 0.975, 1.5) },
     sim = { raceSessionType = 3, currentSessionTime = -10000, timeToSessionStart = 10000, carsCount = 2,
-      trackLengthM = TRACK, currentSessionIndex = 2, gameTime = 0, isAdmin = true, windowWidth = 1920, windowHeight = 1080 },
+      trackLengthM = TRACK, currentSessionIndex = 2, gameTime = 0, time = 0, isAdmin = true, windowWidth = 1920, windowHeight = 1080 },
     penalties = {}, chats = {}, throttle = 0, brakes = 0, extras = {}, events = {}, buttons = {},
     welcome = nil,
   }
@@ -106,7 +106,10 @@ local function setup(serverCfg)
       env.extras[#env.extras + 1] = { title = title, ui = uiCb, close = closeCb, flags = flags }
     end,
     button = function(label) return env.buttons[label] == true end,
-    drawCircleFilled = function() env.circles = (env.circles or 0) + 1 end,
+    drawCircleFilled = function(_, _, col)
+      env.circles = (env.circles or 0) + 1
+      if col and col.r == 1 then env.red = (env.red or 0) + 1 end
+    end,
     slider = function(_, v) return v end,
     mousePos = function() return vec2(0, 0) end,
     mouseDelta = function() return vec2(0, 0) end,
@@ -130,6 +133,7 @@ local function frame(dtMs)
     env.sim.timeToSessionStart = math.max(0, env.sim.timeToSessionStart - dtMs)
   end
   env.sim.gameTime = env.sim.gameTime + dtMs / 1000
+  env.sim.time = env.sim.time + dtMs
   script.update(dtMs / 1000)
   script.drawUI()
   script.draw3D()
@@ -371,6 +375,26 @@ check('S14: okno ustawień zarejestrowane', settings ~= nil)
 settings.ui()
 frame(50)
 check('S14: podgląd bez błędów', true)
+
+---------------------------------------------------------------- scenariusz 15: inny zegar sesji u kierowcy nie zmienia świateł
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+-- komenda od innego auta (admin = auto 1), a zegar sesji tego klienta „uciekł” o 5 s
+env.sim.currentSessionTime = env.sim.currentSessionTime + 5000
+env.cars[0].ping = 80
+env.events[2].cb(env.cars[1], { cmd = 1, t0 = 0, hold = 1000, target = -1 })
+env.red = 0; frame(50)
+check('S15: zaraz po komendzie żadne światło nie świeci', env.red == 0)
+local litAt
+for k = 1, 200 do
+  env.red = 0; frame(50)
+  if not litAt and env.red > 0 then litAt = k end
+end
+-- pierwsze światło po LIGHTS_LEAD_MS (3000 ms) minus pół pingu ≈ 59–60 klatek po 50 ms
+check('S15: pierwsze światło po ok. 3 s', litAt and litAt >= 57 and litAt <= 61)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

@@ -1,5 +1,10 @@
 # Zmiany
 
+## 0.1.4
+
+### Poprawki
+- Światła startowe zapalają się i gasną u wszystkich w tym samym momencie (wcześniej u niektórych kierowców startowały kilka sekund wcześniej).
+
 ## 0.1.3
 
 ### Poprawki

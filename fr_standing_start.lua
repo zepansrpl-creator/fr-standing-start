@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.3'
+local VERSION = '0.1.4'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -401,7 +401,10 @@ local statuses = {}  -- [carIndex] = {state, offsetCm, pending, at}
 -- Automat świateł (tylko klient admina)
 local auto = { readySince = nil, firstReadyAt = nil }
 
-local function now() return sim.currentSessionTime end
+-- Lokalny zegar tego komputera (ms). Światła liczymy od chwili otrzymania komendy,
+-- bo czas sesji potrafi się różnić między komputerami o kilka sekund.
+local function clockMs() return sim.time end
+local lightsSentAt = nil
 local function gameS() return sim.gameTime end
 
 local function notify(text, seconds, color)
@@ -535,7 +538,7 @@ local function startLights(t0, hold)
   if phase ~= L.P.FORMATION then return end
   phase = L.P.LIGHTS
   lightsT0, lightsHold = t0, hold
-  local _, _, outAt = L.lightsState(now(), t0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, hold)
+  local _, _, outAt = L.lightsState(clockMs(), t0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, hold)
   lightsOutAt = outAt
   log(string.format('światła: start %.0f, zgaszenie %.0f', t0, outAt))
 end
@@ -579,7 +582,17 @@ end
 
 onCommand = function(sender, data)
   if data.cmd == L.CMD.LIGHTS then
-    startLights(data.t0, data.hold)
+    -- wspólny moment startu = chwila, gdy komenda dotarła do serwera, + LIGHTS_LEAD_MS;
+    -- odejmujemy połowę pingu (czas drogi serwer → ten komputer)
+    local ping = (myCar.ping and myCar.ping > 0) and myCar.ping or 0
+    local t0
+    if sender and sender.index == 0 and lightsSentAt and clockMs() - lightsSentAt < 5000 then
+      t0 = lightsSentAt + ping / 2 + cfg.LIGHTS_LEAD_MS
+    else
+      t0 = clockMs() - ping / 2 + cfg.LIGHTS_LEAD_MS
+    end
+    lightsSentAt = nil
+    startLights(t0, data.hold)
   elseif data.cmd == L.CMD.ABORT then
     if phase == L.P.LIGHTS or phase == L.P.FORMATION then startFormation(true) end
   elseif data.cmd == L.CMD.PARDON then
@@ -599,8 +612,8 @@ end
 local function adminSend(cmd, target)
   local t0, hold = 0, 0
   if cmd == L.CMD.LIGHTS then
-    math.randomseed(os.time() + math.floor(now()))
-    t0 = now() + cfg.LIGHTS_LEAD_MS
+    math.randomseed(os.time() + math.floor(clockMs()))
+    lightsSentAt = clockMs()
     hold = math.random(cfg.HOLD_MIN_MS, cfg.HOLD_MAX_MS)
   end
   sendCommand({ cmd = cmd, t0 = t0, hold = hold, target = target or -1 })
@@ -715,7 +728,7 @@ local function updateFormation(dt)
 end
 
 local function updateLights()
-  local lit, out = L.lightsState(now(), lightsT0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, lightsHold)
+  local lit, out = L.lightsState(clockMs(), lightsT0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, lightsHold)
   -- pierwsze światło: zapamiętaj pozycję i czy auto stało
   if lit >= 1 and not me.lightsStartPos then
     me.lightsStartPos = myCar.position:clone()
@@ -739,7 +752,7 @@ local function updateLights()
       moved = L.slotOffset(myCar.position, me.lightsStartPos, myCar.look, myCar.side)
     end
     if L.isJumpStart(moved, cfg) then
-      me.jumpMs = math.max(0, math.floor(lightsOutAt - now()))
+      me.jumpMs = math.max(0, math.floor(lightsOutAt - clockMs()))
       log('falstart ' .. me.jumpMs .. ' ms')
     end
   end
@@ -772,7 +785,7 @@ local function updateRacing()
   if gameS() - lightsDoneAt > 5 then return end
   local moved = L.slotOffset(myCar.position, me.outPos, myCar.look, myCar.side)
   if moved > 0.3 then
-    me.reactionMs = math.floor(now() - lightsOutAt)
+    me.reactionMs = math.floor(clockMs() - lightsOutAt)
     notify(T('reaction', me.reactionMs), 5, rgbm.colors.green)
     if cfg.REPORT_REACTION == 1 and not me.pitStart then
       chat(string.format(T('chatReaction'), cfg.CHAT_PREFIX .. 'R', mySlotNumber(), myName(), me.reactionMs))
@@ -956,7 +969,7 @@ local function banner(text, dy, size, color, bg)
 end
 
 local function drawLights()
-  local lit, out = L.lightsState(now(), lightsT0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, lightsHold)
+  local lit, out = L.lightsState(clockMs(), lightsT0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, lightsHold)
   if out then return end
   local w = screen()
   local n = cfg.LIGHTS_COUNT

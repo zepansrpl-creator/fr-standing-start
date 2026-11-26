@@ -15,7 +15,7 @@ Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwe
    - czerwone: przestrzelone.
 
    Biała linia pokazuje, gdzie ma być przód auta. Czerwona linia to granica, za którą jest kara.
-4. **Światła.** Admin klika „Zapal światła” albo światła zapalają się same, gdy wszyscy stoją (opcja `AUTO_LIGHTS`). Zapala się 5 czerwonych świateł, potem jest losowa przerwa i światła gasną. Moment startu jest liczony od czasu sesji, który jest wspólny dla wszystkich, więc u każdego światła gasną jednocześnie.
+4. **Światła.** Admin klika „Zapal światła” albo światła zapalają się same, gdy wszyscy stoją (opcja `AUTO_LIGHTS`). Zapala się 5 czerwonych świateł, potem jest losowa przerwa i światła gasną. Każdy komputer liczy światła od chwili, gdy komenda dotarła do serwera (z poprawką na ping), więc u wszystkich gasną jednocześnie.
 5. **Falstart i przestrzelenie pola.** Kara jest nakładana w chwili zgaszenia świateł i ogłaszana na czacie. Każdy dostaje też swój czas reakcji.
 
 ### Zasady
@@ -43,7 +43,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.3/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.4/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -56,7 +56,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.3`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.4`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
