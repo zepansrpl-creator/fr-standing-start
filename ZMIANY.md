@@ -1,5 +1,10 @@
 # Zmiany
 
+## 0.1.3
+
+### Poprawki
+- Po cofnięciu z małego przestrzelenia (do 5 m) napis „za daleko” znika, a pole robi się zielone; przestrzelenie ponad 5 m dalej oznacza karę.
+
 ## 0.1.2
 
 ### Nowe funkcje

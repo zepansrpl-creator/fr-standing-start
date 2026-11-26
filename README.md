@@ -27,7 +27,8 @@ Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwe
 | Za daleko o ponad 5 m | **drive-through** (3 okrążenia na odbycie) |
 | Obok pola (w lewo/prawo) o ponad 1 m | komunikat „stań na środku pola” i żółta strzałka do środka pola |
 | Obok pola o ponad 2 m przy zapaleniu świateł | **drive-through** |
-| Cofnięcie po przestrzeleniu | nie kasuje przestrzelenia, liczy się najdalszy punkt |
+| Cofnięcie po przestrzeleniu do 5 m | można poprawić ustawienie |
+| Cofnięcie po przestrzeleniu ponad 5 m | kara zostaje (liczy się najdalszy punkt) |
 | Ruch ponad 0,5 m przed zgaszeniem świateł | **falstart → drive-through** |
 | Start z alei serwisowej | wyjazd z alei przed zgaszeniem świateł = falstart |
 | Wjazd do alei w trakcie formującego | start z alei |
@@ -42,7 +43,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.2/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.3/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -55,7 +56,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.2`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.3`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.

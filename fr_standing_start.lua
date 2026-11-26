@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.2'
+local VERSION = '0.1.3'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -106,12 +106,14 @@ end
 -- Ocena stojącego (lub dojeżdżającego) auta względem pola.
 -- long – bieżące przesunięcie, maxLong – najdalsze przesunięcie osiągnięte w strefie pola.
 function L.classifySlot(long, maxLong, speedKmh, cfg, lat)
-  local over = cfg.ALLOW_REVERSE == 1 and long or math.max(long, maxLong)
-  if over > cfg.GRID_WARNING_M then return L.S.OVERSHOOT_PEN, over end
+  -- kara za przestrzelenie zostaje mimo cofnięcia (chyba że ALLOW_REVERSE = 1);
+  -- małe przestrzelenie (ostrzeżenie) można poprawić cofając
+  local worst = cfg.ALLOW_REVERSE == 1 and long or math.max(long, maxLong)
+  if worst > cfg.GRID_WARNING_M then return L.S.OVERSHOOT_PEN, worst end
   local stopped = speedKmh < 0.5
   if not stopped then return L.S.APPROACH, long end
   if lat and math.abs(lat) > cfg.LATERAL_TOLERANCE_M and math.abs(long) < 10 then return L.S.WRONG_LANE, lat end
-  if over > cfg.GRID_TOLERANCE_M then return L.S.OVERSHOOT, over end
+  if long > cfg.GRID_TOLERANCE_M then return L.S.OVERSHOOT, long end
   if long < -cfg.GRID_TOLERANCE_M then return L.S.SHORT, long end
   return L.S.IN_SLOT, long
 end
@@ -1029,7 +1031,7 @@ function script.drawUI()
       elseif st == L.S.WRONG_LANE then
         banner(T('wrongLane', math.abs(me.lat or 0)), 0, 30, rgbm.colors.yellow)
       elseif st == L.S.OVERSHOOT then
-        banner(T('overshoot', math.max(me.long, me.maxLong)), 0, 30, rgbm.colors.yellow)
+        banner(T('overshoot', me.long), 0, 30, rgbm.colors.yellow)
       elseif st == L.S.OVERSHOOT_PEN then
         banner(T('overshootPen', me.maxLong), 0, 30, rgbm.colors.white, rgbm(0.7, 0, 0, 0.8))
       elseif st == L.S.LATE then
