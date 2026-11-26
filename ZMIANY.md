@@ -1,5 +1,17 @@
 # Zmiany
 
+## 0.1.2
+
+### Nowe funkcje
+- Wyraźniejsze pole na asfalcie: mocniejsze kolory, gruba obwódka, biała linia przodu, słupki i numer pola.
+- Wykrywanie stania obok pola (w lewo/prawo): komunikat, strzałka do środka pola, kara powyżej 2 m.
+- Informacja o karze drive-through: ile okrążeń zostało, potwierdzenie odbycia albo jego braku.
+- Okno ustawień kierowcy: język oraz przesuwanie i wielkość napisów z odległością.
+
+### Poprawki
+- Kara za przestrzelenie pola dopiero od 5 m.
+- Czas reakcji na czacie widzi tylko jego autor.
+
 ## 0.1.1
 
 ### Nowe funkcje

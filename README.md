@@ -23,8 +23,10 @@ Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwe
 | Sytuacja | Co się dzieje (domyślnie) |
 |---|---|
 | Stoisz do 0,5 m przed/za linią pola | OK |
-| Za daleko o 0,5–2 m | ostrzeżenie, bez kary |
-| Za daleko o ponad 2 m | **drive-through** (3 okrążenia na odbycie) |
+| Za daleko o 0,5–5 m | ostrzeżenie, bez kary |
+| Za daleko o ponad 5 m | **drive-through** (3 okrążenia na odbycie) |
+| Obok pola (w lewo/prawo) o ponad 1 m | komunikat „stań na środku pola” i żółta strzałka do środka pola |
+| Obok pola o ponad 2 m przy zapaleniu świateł | **drive-through** |
 | Cofnięcie po przestrzeleniu | nie kasuje przestrzelenia, liczy się najdalszy punkt |
 | Ruch ponad 0,5 m przed zgaszeniem świateł | **falstart → drive-through** |
 | Start z alei serwisowej | wyjazd z alei przed zgaszeniem świateł = falstart |
@@ -40,20 +42,20 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.1/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.2/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
 FORMATION_SPEED_KMH = 80
 GRID_TOLERANCE_M = 0.5
-GRID_WARNING_M = 2.0
+GRID_WARNING_M = 5.0
 OVERSHOOT_PENALTY = DRIVE_THROUGH
 JUMP_START_PENALTY = DRIVE_THROUGH
 PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.1`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.2`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -68,7 +70,9 @@ AUTO_LIGHTS = 0
 | `FORMATION_SPEED_KMH` | `80` | limit na formującym (0 = brak limitu) |
 | `APPROACH_ZONE_M` | `300` | od jakiej odległości pokazujemy pole |
 | `GRID_TOLERANCE_M` | `0.5` | tolerancja ustawienia |
-| `GRID_WARNING_M` | `2.0` | powyżej tego przestrzelenie = kara |
+| `GRID_WARNING_M` | `5.0` | powyżej tego przestrzelenie = kara |
+| `LATERAL_TOLERANCE_M` | `1.0` | tyle można stać obok środka pola |
+| `LATERAL_PENALTY_M` | `2.0` | stanie dalej obok pola przy zapaleniu świateł = kara |
 | `ALLOW_REVERSE` | `0` | `1` = cofnięcie poprawia ustawienie |
 | `OVERSHOOT_PENALTY` | `DRIVE_THROUGH` | `DRIVE_THROUGH` / `TELEPORT` / `WARNING` |
 | `JUMP_START_PENALTY` | `DRIVE_THROUGH` | jak wyżej |
@@ -82,7 +86,7 @@ AUTO_LIGHTS = 0
 | `AUTO_LIGHTS` | `0` | `1` = klient admina sam zapala światła |
 | `AUTO_DELAY_S` | `5` | tyle sekund wszyscy muszą stać |
 | `AUTO_TIMEOUT_S` | `60` | po tylu sekundach od pierwszego auta na polu światła ruszą i tak |
-| `REPORT_REACTION` | `1` | czasy reakcji na czacie |
+| `REPORT_REACTION` | `1` | czas reakcji na czacie (każdy widzi tylko swój) |
 | `CHAT_PREFIX` | `FRSS>` | początek wpisów na czacie, przyda się później do logu |
 
 ## Panel admina
@@ -103,7 +107,11 @@ Komendy na czacie (działają tylko dla admina, nie są widoczne dla innych):
 | `!frss przerwij` | przerwij start (dodatkowe formujące) |
 | `!frss pomin` | pomiń formujące (test) |
 
-Każdy kierowca ma też w tym samym menu przełącznik języka **„FR Standing Start: język PL/EN”**.
+Każdy kierowca ma w tym samym menu okno **„FR Standing Start – ustawienia”**:
+- zmiana języka PL/EN,
+- przesuwanie napisów z odległością (suwaki albo przeciągnięcie podglądu myszką) i ich wielkość; zapamiętywane na komputerze kierowcy.
+
+Po karze drive-through kierowca widzi na ekranie, ile okrążeń zostało na jej odbycie; odbycie (przejazd przez aleję) jest potwierdzane na ekranie i na czacie.
 
 ## Testy
 
@@ -125,7 +133,7 @@ Testy sprawdzają:
 - [ ] Ok. 300 m przed polem pojawia się odliczanie, a na asfalcie widać pole.
 - [ ] Zatrzymanie na polu daje „STOP – STOISZ NA POLU” i zielone pole.
 - [ ] „Zapal światła” w panelu: 5 świateł, zgaszenie, czas reakcji na czacie.
-- [ ] Drugi wyścig: celowe przestrzelenie o ponad 2 m daje drive-through po zgaszeniu świateł.
+- [ ] Drugi wyścig: celowe przestrzelenie o ponad 5 m daje drive-through po zgaszeniu świateł.
 - [ ] Trzeci wyścig: ruszenie przy zapalonych światłach daje falstart i karę.
 - [ ] Skrót do testów: „Pomiń formujące (test)” od razu po starcie z gry, potem „Zapal światła”.
 

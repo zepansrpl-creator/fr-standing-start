@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.1'
+local VERSION = '0.1.2'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -21,7 +21,9 @@ L.DEFAULTS = {
   FORMATION_SPEED_KMH = 80,    -- limit prędkości na okrążeniu formującym (0 = brak)
   APPROACH_ZONE_M = 300,       -- od jakiej odległości pokazujemy pole i odliczanie metrów
   GRID_TOLERANCE_M = 0.5,      -- tyle można stanąć przed/za linią pola bez uwag
-  GRID_WARNING_M = 2.0,        -- przestrzelenie do tej wartości = tylko ostrzeżenie
+  GRID_WARNING_M = 5.0,        -- przestrzelenie do tej wartości = tylko ostrzeżenie, dalej kara
+  LATERAL_TOLERANCE_M = 1.0,   -- tyle można stać obok środka pola (w lewo/prawo) bez uwag
+  LATERAL_PENALTY_M = 2.0,     -- stoi dalej obok pola przy zapaleniu świateł = kara jak za przestrzelenie
   ALLOW_REVERSE = 0,           -- 0: liczy się najdalszy punkt (cofanie nie kasuje przestrzelenia)
   OVERSHOOT_PENALTY = 'DRIVE_THROUGH', -- DRIVE_THROUGH / TELEPORT / WARNING
   JUMP_START_PENALTY = 'DRIVE_THROUGH',
@@ -54,6 +56,7 @@ L.S = {
   NO_SLOT = 9,     -- brak pola (dołączył po starcie)
   RACING = 10,     -- po zgaszeniu świateł
   LATE = 11,       -- jechał, gdy zapaliły się światła
+  WRONG_LANE = 12, -- stoi obok pola (w lewo/prawo)
 }
 
 -- Fazy wyścigu (wspólne dla wszystkich, sterowane startem z gry i komendami admina).
@@ -102,20 +105,31 @@ end
 
 -- Ocena stojącego (lub dojeżdżającego) auta względem pola.
 -- long – bieżące przesunięcie, maxLong – najdalsze przesunięcie osiągnięte w strefie pola.
-function L.classifySlot(long, maxLong, speedKmh, cfg)
+function L.classifySlot(long, maxLong, speedKmh, cfg, lat)
   local over = cfg.ALLOW_REVERSE == 1 and long or math.max(long, maxLong)
   if over > cfg.GRID_WARNING_M then return L.S.OVERSHOOT_PEN, over end
   local stopped = speedKmh < 0.5
   if not stopped then return L.S.APPROACH, long end
+  if lat and math.abs(lat) > cfg.LATERAL_TOLERANCE_M and math.abs(long) < 10 then return L.S.WRONG_LANE, lat end
   if over > cfg.GRID_TOLERANCE_M then return L.S.OVERSHOOT, over end
   if long < -cfg.GRID_TOLERANCE_M then return L.S.SHORT, long end
   return L.S.IN_SLOT, long
 end
 
+-- Czy stanie obok pola zasługuje na karę (sprawdzane przy zapaleniu świateł).
+function L.isLanePenalty(state, lat, cfg)
+  return state == L.S.WRONG_LANE and math.abs(lat or 0) > cfg.LATERAL_PENALTY_M
+end
+
+-- Stan kary drive-through: ile okrążeń zostało na odbycie.
+function L.dtLapsLeft(laps, startLap, lapCount)
+  return laps - (lapCount - startLap)
+end
+
 -- Czy stan oznacza, że auto czeka na start (stoi).
 function L.isReadyState(s)
   return s == L.S.IN_SLOT or s == L.S.SHORT or s == L.S.OVERSHOOT or s == L.S.OVERSHOOT_PEN
-    or s == L.S.PIT_START or s == L.S.NO_SLOT
+    or s == L.S.PIT_START or s == L.S.NO_SLOT or s == L.S.WRONG_LANE
 end
 
 -- Stan świateł w chwili `now` (ms czasu sesji).
@@ -177,6 +191,7 @@ function L.readConfig(getter)
   cfg.LIGHTS_COUNT = L.clamp(math.floor(cfg.LIGHTS_COUNT), 1, 10)
   if cfg.HOLD_MAX_MS < cfg.HOLD_MIN_MS then cfg.HOLD_MAX_MS = cfg.HOLD_MIN_MS end
   if cfg.GRID_WARNING_M < cfg.GRID_TOLERANCE_M then cfg.GRID_WARNING_M = cfg.GRID_TOLERANCE_M end
+  if cfg.LATERAL_PENALTY_M < cfg.LATERAL_TOLERANCE_M then cfg.LATERAL_PENALTY_M = cfg.LATERAL_TOLERANCE_M end
   return cfg
 end
 
@@ -224,9 +239,25 @@ L.TEXT = {
     on = 'włączony', off = 'wyłączony',
     stateNames = {
       [0] = '–', 'na polu (przed startem)', 'formujące', 'dojeżdża', 'na polu', 'przed polem',
-      'za daleko', 'PRZESTRZELIŁ (kara)', 'aleja serwisowa', 'brak pola', 'wyścig', 'spóźniony',
+      'za daleko', 'PRZESTRZELIŁ (kara)', 'aleja serwisowa', 'brak pola', 'wyścig', 'spóźniony', 'obok pola',
     },
     pending = 'kara czeka',
+    wrongLane = 'STAŃ NA ŚRODKU POLA – jesteś obok o %.1f m',
+    chatLane = '%s P%d %s: stał obok pola (%.1f m) → %s',
+    penDTInfo = 'DRIVE-THROUGH: przejedź przez aleję serwisową – zostało okrążeń: %d',
+    penDTLast = 'DRIVE-THROUGH: OSTATNIE OKRĄŻENIE na odbycie kary!',
+    penServed = 'Kara drive-through odbyta',
+    penMissed = 'Nie odbyłeś drive-through w wyznaczonym czasie',
+    chatServed = '%s %s: drive-through odbyty',
+    chatMissed = '%s %s: drive-through NIE odbyty',
+    settingsTitle = 'FR Standing Start – ustawienia',
+    setLang = 'Język: %s (kliknij, aby zmienić)',
+    setPosX = 'Poziomo',
+    setPosY = 'Pionowo',
+    setScale = 'Wielkość',
+    setHint = 'Możesz też przeciągnąć podgląd myszką.',
+    setReset = 'Przywróć domyślne',
+    preview = 'P1 · 12.3 m (podgląd)',
     chatHelp = 'Czat: !frss swiatla / !frss przerwij / !frss pomin',
     noData = 'brak danych',
   },
@@ -271,9 +302,25 @@ L.TEXT = {
     on = 'on', off = 'off',
     stateNames = {
       [0] = '–', 'on grid (before start)', 'formation', 'approaching', 'in slot', 'short of slot',
-      'too far', 'OVERSHOT (penalty)', 'pit lane', 'no slot', 'race', 'late',
+      'too far', 'OVERSHOT (penalty)', 'pit lane', 'no slot', 'race', 'late', 'beside slot',
     },
     pending = 'penalty pending',
+    wrongLane = 'MOVE TO THE CENTRE OF THE SLOT – you are %.1f m off',
+    chatLane = '%s P%d %s: stopped beside the slot (%.1f m) → %s',
+    penDTInfo = 'DRIVE-THROUGH: drive through the pit lane – laps left: %d',
+    penDTLast = 'DRIVE-THROUGH: LAST LAP to serve the penalty!',
+    penServed = 'Drive-through served',
+    penMissed = 'Drive-through not served in time',
+    chatServed = '%s %s: drive-through served',
+    chatMissed = '%s %s: drive-through NOT served',
+    settingsTitle = 'FR Standing Start – settings',
+    setLang = 'Language: %s (click to change)',
+    setPosX = 'Horizontal',
+    setPosY = 'Vertical',
+    setScale = 'Size',
+    setHint = 'You can also drag the preview with the mouse.',
+    setReset = 'Reset to defaults',
+    preview = 'P1 · 12.3 m (preview)',
     chatHelp = 'Chat: !frss lights / !frss abort / !frss skip',
     noData = 'no data',
   },
@@ -447,6 +494,7 @@ local function applyPenalty(pen)
   if pen.kind == 'dt' then
     physics.setCarPenalty(ac.PenaltyType.MandatoryPits, pen.param)
     notify(T('penDT', pen.param), 8, rgbm.colors.red)
+    me.dt = { laps = pen.param, startLap = myCar.lapCount, inPit = myCar.isInPitlane, done = false }
   elseif pen.kind == 'teleport' then
     physics.setCarPenalty(ac.PenaltyType.TeleportToPits, pen.param)
     notify(T('penTP', pen.param), 8, rgbm.colors.red)
@@ -510,7 +558,12 @@ local function finishStart()
   end
   if me.pending then
     pen = L.stronger(pen, me.pending)
-    chat(string.format(T('chatOver'), cfg.CHAT_PREFIX, n, name, me.maxLong, penaltyText(me.pending)))
+    if me.maxLong > cfg.GRID_WARNING_M then
+      chat(string.format(T('chatOver'), cfg.CHAT_PREFIX, n, name, me.maxLong, penaltyText(me.pending)))
+    end
+    if me.lanePenalty then
+      chat(string.format(T('chatLane'), cfg.CHAT_PREFIX, n, name, me.lanePenalty, penaltyText(me.pending)))
+    end
   end
   if me.late then
     chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name))
@@ -531,6 +584,7 @@ onCommand = function(sender, data)
     if data.target == myCar.sessionID and phase ~= L.P.RACING then
       me.pending = nil
       me.jumpMs = nil
+      me.lanePenalty = nil
       me.pardoned = true
       notify(T('pardoned'), 6, rgbm.colors.green)
       pushStatus(true)
@@ -585,6 +639,10 @@ ac.onChatMessage(function(message, senderCarIndex)
     pcall(ac.checkAdminPrivileges)
     log('rozpoznano admina po komendzie /admin')
     return false
+  end
+  -- czas reakcji widzi tylko jego autor
+  if msg:sub(1, #cfg.CHAT_PREFIX + 1) == cfg.CHAT_PREFIX .. 'R' and senderCarIndex ~= 0 then
+    return true
   end
   local cmd = msg:match('^!frss%s+(%S+)')
   if cmd then
@@ -644,7 +702,7 @@ local function updateFormation(dt)
   if L.isApproaching(me.traveled, trackLen, dist, cfg) then
     me.long, me.lat = dist, lat
     if math.abs(dist) < 60 then me.maxLong = math.max(me.maxLong, dist) end
-    local st = L.classifySlot(dist, me.maxLong, myCar.speedKmh, cfg)
+    local st = L.classifySlot(dist, me.maxLong, myCar.speedKmh, cfg, lat)
     me.state = st
     if st == L.S.OVERSHOOT_PEN and not me.pardoned then
       me.pending = L.parsePenalty(cfg.OVERSHOOT_PENALTY, cfg)
@@ -660,6 +718,10 @@ local function updateLights()
   if lit >= 1 and not me.lightsStartPos then
     me.lightsStartPos = myCar.position:clone()
     me.wasStopped = myCar.speedKmh < 1
+    if L.isLanePenalty(me.state, me.lat, cfg) and not me.pardoned then
+      me.lanePenalty = math.abs(me.lat)
+      me.pending = L.stronger(me.pending, L.parsePenalty(cfg.OVERSHOOT_PENALTY, cfg))
+    end
     if not me.wasStopped and not me.pitStart and slots[0] then
       me.late = true
       me.state = L.S.LATE
@@ -682,7 +744,27 @@ local function updateLights()
   if out then finishStart() end
 end
 
+local function updateDriveThrough()
+  local dt = me.dt
+  if not dt or dt.done then return end
+  if myCar.isInPitlane then
+    dt.inPit = true
+  elseif dt.inPit then
+    dt.done = true
+    notify(T('penServed'), 6, rgbm.colors.green)
+    chat(string.format(T('chatServed'), cfg.CHAT_PREFIX, myName()))
+    return
+  end
+  if L.dtLapsLeft(dt.laps, dt.startLap, myCar.lapCount) <= 0 and not dt.inPit then
+    dt.done = true
+    dt.missed = true
+    notify(T('penMissed'), 8, rgbm.colors.red)
+    chat(string.format(T('chatMissed'), cfg.CHAT_PREFIX, myName()))
+  end
+end
+
 local function updateRacing()
+  updateDriveThrough()
   -- czas reakcji w pierwszych 5 s po zgaszeniu świateł
   if me.reactionMs or me.jumpMs or me.late or not me.outPos or not lightsDoneAt then return end
   if gameS() - lightsDoneAt > 5 then return end
@@ -691,7 +773,7 @@ local function updateRacing()
     me.reactionMs = math.floor(now() - lightsOutAt)
     notify(T('reaction', me.reactionMs), 5, rgbm.colors.green)
     if cfg.REPORT_REACTION == 1 and not me.pitStart then
-      chat(string.format(T('chatReaction'), cfg.CHAT_PREFIX, mySlotNumber(), myName(), me.reactionMs))
+      chat(string.format(T('chatReaction'), cfg.CHAT_PREFIX .. 'R', mySlotNumber(), myName(), me.reactionMs))
     end
   end
 end
@@ -769,18 +851,28 @@ end
 
 -- Rysowanie pola na torze -------------------------------------------------------
 
-local COL_OK = rgbm(0.1, 0.9, 0.2, 0.45)
-local COL_NEAR = rgbm(1, 0.85, 0.1, 0.4)
-local COL_BAD = rgbm(1, 0.15, 0.1, 0.5)
-local COL_IDLE = rgbm(1, 1, 1, 0.25)
+local COL_OK = rgbm(0.1, 1, 0.25, 0.55)
+local COL_NEAR = rgbm(1, 0.8, 0.05, 0.55)
+local COL_BAD = rgbm(1, 0.1, 0.05, 0.6)
+local COL_IDLE = rgbm(0.2, 0.6, 1, 0.45)
 
 local function slotColor()
   local st = me.state
   if st == L.S.IN_SLOT then return COL_OK end
   if st == L.S.OVERSHOOT_PEN or st == L.S.LATE then return COL_BAD end
-  if st == L.S.OVERSHOOT or st == L.S.SHORT then return COL_NEAR end
+  if st == L.S.OVERSHOOT or st == L.S.SHORT or st == L.S.WRONG_LANE then return COL_NEAR end
   if st == L.S.APPROACH and me.dist and math.abs(me.dist) < 15 then return COL_NEAR end
   return COL_IDLE
+end
+
+-- prostokątny pasek na asfalcie od punktu a do b o szerokości w
+local function band(a, b, dirSide, w, col)
+  local h = dirSide * (w / 2)
+  render.quad(a - h, a + h, b + h, b - h, col)
+end
+
+local function bright(col, k)
+  return rgbm(math.min(col.r * k, 4), math.min(col.g * k, 4), math.min(col.b * k, 4), 1)
 end
 
 function script.draw3D()
@@ -788,24 +880,42 @@ function script.draw3D()
   local s = slots[0]
   if not s or me.pitStart then return end
   if phase == L.P.FORMATION and me.state == L.S.FORMATION then return end
-  local y = (s.groundY or s.pos.y) + 0.04
+  local y = (s.groundY or s.pos.y) + 0.05
   local base = vec3(s.pos.x, y, s.pos.z)
   local look = vec3(s.look.x, 0, s.look.z):normalize()
   local side = vec3(s.side.x, 0, s.side.z):normalize()
-  local halfL, halfW = (s.size.z or 4.6) / 2, (s.size.x or 2) / 2 + 0.15
+  local halfL = (s.size.z or 4.6) / 2
+  local halfW = math.min((s.size.x or 2) / 2, 1.1) + 0.1
   local f, b, l, r = look * halfL, look * -halfL, side * -halfW, side * halfW
   render.setBlendMode(render.BlendMode.AlphaBlend)
   render.setDepthMode(render.DepthMode.ReadOnlyLessEqual)
   render.setCullMode(render.CullMode.None)
   local col = slotColor()
+  local edge = bright(col, 2.5)
+  -- wypełnienie pola
   render.quad(base + b + l, base + b + r, base + f + r, base + f + l, col)
-  -- linia przodu pola (tu ma być przód auta)
-  local lineCol = rgbm(1, 1, 1, 0.9)
-  local f2 = look * (halfL + 0.15)
-  render.quad(base + f + l, base + f + r, base + f2 + r, base + f2 + l, lineCol)
-  -- granica tolerancji przestrzelenia
+  -- gruba obwódka (25 cm)
+  local t = 0.25
+  band(base + b + l, base + f + l, side, t, edge)
+  band(base + b + r, base + f + r, side, t, edge)
+  band(base + b + l, base + b + r, look, t, edge)
+  -- linia przodu pola: tu ma być przód auta (biała, gruba)
+  band(base + f + l, base + f + r, look, 0.35, rgbm(4, 4, 4, 1))
+  -- słupki na przednich narożnikach, widoczne z daleka
+  local up = vec3(0, 1.2, 0)
+  for _, corner in ipairs({ base + f + l, base + f + r }) do
+    band(corner, corner + up, look, 0.12, rgbm(4, 4, 4, 1))
+  end
+  -- granica kary za przestrzelenie (czerwona)
   local w = look * (halfL + cfg.GRID_WARNING_M)
-  render.debugLine(base + w + l, base + w + r, rgbm(3, 0.2, 0.1, 1))
+  band(base + w + l, base + w + r, look, 0.3, rgbm(4, 0.2, 0.1, 1))
+  -- strzałka do środka pola, gdy auto stoi obok
+  if me.state == L.S.WRONG_LANE then
+    local from = vec3(myCar.position.x, y, myCar.position.z)
+    local to = base + look * L.clamp(me.long or 0, -halfL, halfL)
+    band(from, to, look, 0.3, rgbm(4, 3, 0.2, 1))
+  end
+  pcall(render.debugText, base + look * halfL + vec3(0, 1.6, 0), 'P' .. tostring(s.gridPos), rgbm(1, 1, 1, 1), 2.5)
   render.setCullMode(render.CullMode.Back)
   render.setDepthMode(render.DepthMode.Normal)
   render.setBlendMode(render.BlendMode.Opaque)
@@ -813,19 +923,34 @@ end
 
 -- HUD -----------------------------------------------------------------------------
 
+-- Pozycja i wielkość napisów (kierowca może je przesunąć, zapamiętywane na jego komputerze).
+local HUD_DEFAULT = { x = 0.5, y = 0.14, scale = 1.0 }
+local hud
+do
+  local ok, st = pcall(ac.storage, { x = 0.5, y = 0.14, scale = 1.0 }, 'frss_hud_')
+  if ok and st then hud = st else hud = { x = 0.5, y = 0.14, scale = 1.0 } end
+end
+local settingsSeenAt = -100
+local dragging = false
+
 local function screen()
   local scale = ac.getUI().uiScale or 1
   return sim.windowWidth / scale, sim.windowHeight / scale
 end
 
-local function banner(text, y, size, color, bg)
-  local w = screen()
+-- napis wyśrodkowany w punkcie HUD (dy – przesunięcie w dół)
+local function banner(text, dy, size, color, bg)
+  local w, h = screen()
+  local k = hud.scale or 1
+  size = size * k
+  local cx, y = w * hud.x, h * hud.y + dy * k
   local ts = ui.measureDWriteText(text, size)
-  local pad = vec2(18, 8)
-  local p1 = vec2(w / 2 - ts.x / 2 - pad.x, y - pad.y)
-  local p2 = vec2(w / 2 + ts.x / 2 + pad.x, y + ts.y + pad.y)
+  local pad = vec2(18 * k, 8 * k)
+  local p1 = vec2(cx - ts.x / 2 - pad.x, y - pad.y)
+  local p2 = vec2(cx + ts.x / 2 + pad.x, y + ts.y + pad.y)
   ui.drawRectFilled(p1, p2, bg or rgbm(0, 0, 0, 0.6), 6)
-  ui.dwriteDrawText(text, size, vec2(w / 2 - ts.x / 2, y), color or rgbm.colors.white)
+  ui.dwriteDrawText(text, size, vec2(cx - ts.x / 2, y), color or rgbm.colors.white)
+  return p1, p2
 end
 
 local function drawLights()
@@ -844,45 +969,82 @@ local function drawLights()
   end
 end
 
-function script.drawUI()
-  if phase == L.P.IDLE or phase == L.P.GRID then return end
-  pcall(ui.pushDWriteFont, 'Segoe UI;Weight=Bold')
-  local y = 150
-
-  if phase == L.P.LIGHTS then drawLights() end
-
-  if phase == L.P.FORMATION or phase == L.P.LIGHTS then
-    local st = me.state
-    if st == L.S.PIT_START then
-      banner(T('pitStart'), y, 20, rgbm.colors.yellow)
-    elseif st == L.S.NO_SLOT then
-      banner(T('noSlot'), y, 20, rgbm.colors.yellow)
-    elseif st == L.S.FORMATION then
-      local head = cfg.FORMATION_SPEED_KMH > 0 and T('formationLimit', cfg.FORMATION_SPEED_KMH) or T('formation')
-      banner(head .. '   ·   ' .. T('yourSlot', mySlotNumber()), y, 20)
-    elseif st == L.S.APPROACH then
-      local d = -(me.dist or 0)
-      if d > 20 then banner(T('toGo', mySlotNumber(), math.floor(d + 0.5)), y, 34)
-      elseif d > 0 then banner(T('toGoNear', mySlotNumber(), d), y, 40, rgbm.colors.yellow)
-      else banner(T('overshoot', -d), y, 34, rgbm.colors.yellow) end
-    elseif st == L.S.IN_SLOT then
-      banner(T('stop'), y, 34, rgbm(0.2, 1, 0.3, 1))
-    elseif st == L.S.SHORT then
-      banner(T('short', -me.long), y, 30, rgbm.colors.yellow)
-    elseif st == L.S.OVERSHOOT then
-      banner(T('overshoot', math.max(me.long, me.maxLong)), y, 30, rgbm.colors.yellow)
-    elseif st == L.S.OVERSHOOT_PEN then
-      banner(T('overshootPen', me.maxLong), y, 30, rgbm.colors.white, rgbm(0.7, 0, 0, 0.8))
-    elseif st == L.S.LATE then
-      banner(T('late'), y, 24, rgbm.colors.yellow)
+local function drawPreview()
+  local p1, p2 = banner(T('preview'), 0, 34, rgbm.colors.yellow, rgbm(0, 0, 0, 0.8))
+  -- przeciąganie myszką
+  local m = ui.mousePos()
+  local inside = m.x >= p1.x and m.x <= p2.x and m.y >= p1.y and m.y <= p2.y
+  if ui.mouseDown(0) then
+    if inside or dragging then
+      dragging = true
+      local w, h = screen()
+      local d = ui.mouseDelta()
+      hud.x = L.clamp(hud.x + d.x / w, 0.05, 0.95)
+      hud.y = L.clamp(hud.y + d.y / h, 0.02, 0.95)
     end
-    if phase == L.P.LIGHTS and st ~= L.S.LATE then
-      banner(T('waitLights'), y + 60, 18)
-    end
+  else
+    dragging = false
   end
+end
 
-  if me.notice and gameS() < me.noticeUntil then
-    banner(me.notice, y + 110, 24, me.noticeColor)
+local function drawDriveThroughInfo()
+  local dt = me.dt
+  if not dt or dt.done then return end
+  local left = L.dtLapsLeft(dt.laps, dt.startLap, myCar.lapCount)
+  if left <= 1 then
+    banner(T('penDTLast'), 0, 22, rgbm.colors.white, rgbm(0.75, 0, 0, 0.85))
+  else
+    banner(T('penDTInfo', left), 0, 20, rgbm.colors.white, rgbm(0.6, 0, 0, 0.7))
+  end
+end
+
+function script.drawUI()
+  local previewOn = gameS() - settingsSeenAt < 0.3
+  if (phase == L.P.IDLE or phase == L.P.GRID) and not previewOn then return end
+  pcall(ui.pushDWriteFont, 'Segoe UI;Weight=Bold')
+
+  if previewOn then
+    drawPreview()
+  else
+    if phase == L.P.LIGHTS then drawLights() end
+
+    if phase == L.P.FORMATION or phase == L.P.LIGHTS then
+      local st = me.state
+      if st == L.S.PIT_START then
+        banner(T('pitStart'), 0, 20, rgbm.colors.yellow)
+      elseif st == L.S.NO_SLOT then
+        banner(T('noSlot'), 0, 20, rgbm.colors.yellow)
+      elseif st == L.S.FORMATION then
+        local head = cfg.FORMATION_SPEED_KMH > 0 and T('formationLimit', cfg.FORMATION_SPEED_KMH) or T('formation')
+        banner(head .. '   ·   ' .. T('yourSlot', mySlotNumber()), 0, 20)
+      elseif st == L.S.APPROACH then
+        local d = -(me.dist or 0)
+        if d > 20 then banner(T('toGo', mySlotNumber(), math.floor(d + 0.5)), 0, 34)
+        elseif d > 0 then banner(T('toGoNear', mySlotNumber(), d), 0, 40, rgbm.colors.yellow)
+        else banner(T('overshoot', -d), 0, 34, rgbm.colors.yellow) end
+      elseif st == L.S.IN_SLOT then
+        banner(T('stop'), 0, 34, rgbm(0.2, 1, 0.3, 1))
+      elseif st == L.S.SHORT then
+        banner(T('short', -me.long), 0, 30, rgbm.colors.yellow)
+      elseif st == L.S.WRONG_LANE then
+        banner(T('wrongLane', math.abs(me.lat or 0)), 0, 30, rgbm.colors.yellow)
+      elseif st == L.S.OVERSHOOT then
+        banner(T('overshoot', math.max(me.long, me.maxLong)), 0, 30, rgbm.colors.yellow)
+      elseif st == L.S.OVERSHOOT_PEN then
+        banner(T('overshootPen', me.maxLong), 0, 30, rgbm.colors.white, rgbm(0.7, 0, 0, 0.8))
+      elseif st == L.S.LATE then
+        banner(T('late'), 0, 24, rgbm.colors.yellow)
+      end
+      if phase == L.P.LIGHTS and st ~= L.S.LATE then
+        banner(T('waitLights'), 60, 18)
+      end
+    elseif phase == L.P.RACING then
+      drawDriveThroughInfo()
+    end
+
+    if me.notice and gameS() < me.noticeUntil then
+      banner(me.notice, 110, 24, me.noticeColor)
+    end
   end
   pcall(ui.popDWriteFont)
 end
@@ -942,12 +1104,26 @@ ui.registerOnlineExtra(ui.Icons.TrafficLight, L.text('PL', 'adminTitle'),
   function() return isAdmin() end, adminUI, nil,
   ui.OnlineExtraFlags.Tool, ui.WindowFlags.None, vec2(420, 540))
 
-ui.registerOnlineExtra(ui.Icons.Settings, L.text('PL', 'langToggle'),
-  function() return true end, nil, function(ok)
-    if ok then
-      lang = lang == 'PL' and 'EN' or 'PL'
-      ui.toast(ui.Icons.Settings, 'FR Standing Start: ' .. lang)
-    end
-  end, ui.OnlineExtraFlags.None)
+local function settingsUI()
+  settingsSeenAt = gameS()
+  if ui.button(T('setLang', lang)) then lang = lang == 'PL' and 'EN' or 'PL' end
+  ui.separator()
+  local v
+  v = ui.slider('##x', hud.x * 100, 5, 95, T('setPosX') .. ': %.0f%%')
+  if v ~= hud.x * 100 then hud.x = v / 100 end
+  v = ui.slider('##y', hud.y * 100, 2, 95, T('setPosY') .. ': %.0f%%')
+  if v ~= hud.y * 100 then hud.y = v / 100 end
+  v = ui.slider('##s', hud.scale * 100, 50, 200, T('setScale') .. ': %.0f%%')
+  if v ~= hud.scale * 100 then hud.scale = v / 100 end
+  ui.text(T('setHint'))
+  if ui.button(T('setReset')) then
+    hud.x, hud.y, hud.scale = HUD_DEFAULT.x, HUD_DEFAULT.y, HUD_DEFAULT.scale
+  end
+  return false
+end
+
+ui.registerOnlineExtra(ui.Icons.Settings, L.text('PL', 'settingsTitle'),
+  function() return true end, settingsUI, nil,
+  ui.OnlineExtraFlags.Tool, ui.WindowFlags.None, vec2(360, 220))
 
 log('v' .. VERSION .. ' start')

@@ -29,7 +29,7 @@ function vec2(x, y) return setmetatable({ x = x or 0, y = y or 0 }, vec2mt) end
 vec2mt.__add = function(a, b) return vec2(a.x + b.x, a.y + b.y) end
 vec2mt.__sub = function(a, b) return vec2(a.x - b.x, a.y - b.y) end
 rgbm = setmetatable({ colors = { white = 'W', red = 'R', yellow = 'Y', green = 'G' } },
-  { __call = function(_, r, g, b, m) return { r, g, b, m } end })
+  { __call = function(_, r, g, b, m) return { r = r, g = g, b = b, mult = m } end })
 bit = require('bit')
 
 ---------------------------------------------------------------- tor i auta
@@ -45,7 +45,7 @@ end
 
 local function makeCar(index, s, lat)
   local c = { index = index, splinePosition = s, speedKmh = 0, isConnected = true, isInPitlane = false,
-    racePosition = index + 1, sessionID = index + 10, aabbSize = vec3(2, 1.2, 4.6), lat = lat or 0 }
+    racePosition = index + 1, sessionID = index + 10, lapCount = 0, aabbSize = vec3(2, 1.2, 4.6), lat = lat or 0 }
   c.position, c.look, c.side = posOnTrack(s, c.lat)
   return c
 end
@@ -107,6 +107,10 @@ local function setup(serverCfg)
     end,
     button = function(label) return env.buttons[label] == true end,
     drawCircleFilled = function() env.circles = (env.circles or 0) + 1 end,
+    slider = function(_, v) return v end,
+    mousePos = function() return vec2(0, 0) end,
+    mouseDelta = function() return vec2(0, 0) end,
+    mouseDown = function() return false end,
   }, { __index = function() return function() end end })
   script = {}
   dofile('fr_standing_start.lua')
@@ -205,7 +209,7 @@ setup(nil)
 for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
-driveFormation(3.0)
+driveFormation(6.0)
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
 check('S2: kara drive-through za przestrzelenie', #env.penalties == 1 and env.penalties[1][1] == 1 and env.penalties[1][2] == 3)
@@ -218,10 +222,10 @@ setup(nil)
 for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
-driveFormation(1.5)
+driveFormation(4.0)
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
-check('S3: 1.5 m = tylko ostrzeżenie', #env.penalties == 0)
+check('S3: 4 m = tylko ostrzeżenie', #env.penalties == 0)
 
 ---------------------------------------------------------------- scenariusz 4: falstart
 setup({ JUMP_START_PENALTY = 'TELEPORT', TELEPORT_SECONDS = 7, LANGUAGE = 'EN' })
@@ -244,7 +248,7 @@ setup(nil)
 for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
-driveFormation(3.0)
+driveFormation(6.0)
 -- admin anuluje karę (target = sessionID auta 0 = 10)
 env.buttons = { ['Anuluj karę##p0'] = true }
 adminPanel().ui()
@@ -332,6 +336,41 @@ frame(50)
 local r10 = false
 for _, m in ipairs(env.chats) do if m:find('reakcja') then r10 = true end end
 check('S10: po /admin komenda !frss swiatla zapala światła', r10)
+
+---------------------------------------------------------------- scenariusz 11: stoi obok pola → kara
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+env.cars[0].lat = -1.5 + 2.6 -- stanie 2.6 m obok swojego pola
+driveFormation(0.0)
+press('Zapal światła')
+for _ = 1, 300 do frame(50) end
+local lane = false
+for _, m in ipairs(env.chats) do if m:find('obok pola') then lane = true end end
+check('S11: kara za stanie obok pola', #env.penalties == 1 and lane)
+
+---------------------------------------------------------------- scenariusz 12: drive-through odbyty w alei
+-- (kontynuacja S11: kierowca ma DT)
+env.cars[0].lat = -1.5
+env.cars[0].isInPitlane = true; frame(50); frame(50)
+env.cars[0].isInPitlane = false; frame(50)
+local served = false
+for _, m in ipairs(env.chats) do if m:find('drive%-through odbyty') then served = true end end
+check('S12: odbycie drive-through rozpoznane', served)
+
+---------------------------------------------------------------- scenariusz 13: czas reakcji innych ukryty
+check('S13: cudzy czas reakcji ukryty', env.chatCb('FRSS>R P2 Kierowca1: reakcja 300 ms', 1, 11) == true)
+check('S13: własny czas reakcji widoczny', env.chatCb('FRSS>R P1 Kierowca0: reakcja 250 ms', 0, 10) == false)
+check('S13: kary innych widoczne', env.chatCb('FRSS> P2 Kierowca1: falstart 100 ms → drive-through', 1, 11) == false)
+
+---------------------------------------------------------------- scenariusz 14: okno ustawień i podgląd
+local settings
+for _, e in ipairs(env.extras) do if e.title:find('ustawienia') then settings = e end end
+check('S14: okno ustawień zarejestrowane', settings ~= nil)
+settings.ui()
+frame(50)
+check('S14: podgląd bez błędów', true)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)
