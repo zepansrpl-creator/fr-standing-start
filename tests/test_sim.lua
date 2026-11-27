@@ -493,6 +493,7 @@ setup(nil)
 for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
+env.events[1].cb(env.cars[1], { state = 4, offsetCm = 0, pending = 0 }) -- inne auto już stoi na polu po formującym
 for _ = 1, 500 do frame(50) end -- stoi na polu 25 s
 local texts = {}
 local old = ui.dwriteDrawText
@@ -691,8 +692,8 @@ check('S31: komunikat dla startującego z boksu przed ruszeniem', pitMsg)
 press('Zapal światła')
 tx31 = {}; frame(50)
 local five = false
-for _, t in ipairs(tx31) do if t:find('5 s do świateł') then five = true end end
-check('S31: odliczanie „5 s do świateł”', five)
+for _, t in ipairs(tx31) do if t:find('5s do świateł') then five = true end end
+check('S31: komunikat „5s do świateł”', five)
 ui.dwriteDrawText = old31
 
 ---------------------------------------------------------------- scenariusz 32: dołączający po zgaszeniu świateł dostaje zielone razem ze stawką
@@ -727,6 +728,16 @@ env.events[1].cb(env.cars[2], { state = 14, offsetCm = 0, pending = 0 })
 local litAt33
 for k = 1, 600 do env.red = 0; frame(50); if not litAt33 and env.red > 0 then litAt33 = k end end
 check('S33: światła po limicie czasu (20 s + 3 s), mimo auta z boksu na torze', litAt33 and litAt33 >= 440 and litAt33 <= 480)
+
+---------------------------------------------------------------- scenariusz 34: wszyscy stoją na starcie formującego – automat nie zapala świateł
+setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 2, AUTO_TIMEOUT_S = 30 })
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+env.events[1].cb(env.cars[1], { state = 2, offsetCm = 0, pending = 0 })
+env.red = 0
+for _ = 1, 1400 do frame(50) end -- 70 s stania na polach
+check('S34: brak świateł, gdy nikt nie przejechał formującego', (env.red or 0) == 0)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

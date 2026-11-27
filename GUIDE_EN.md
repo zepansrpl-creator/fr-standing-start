@@ -17,7 +17,7 @@ It is a **CSP online script**. Server admins only add a few lines to the server 
    - red: penalty.
 
    Arrows show where to move: `↑ move up`, `↓ too far`, `← LEFT / RIGHT →`.
-4. **Start lights.** A "5 s to the lights" countdown is shown to everyone. The admin starts the lights, or they start automatically once everyone has stopped. Five red lights come on, then go out after a random delay. They go out at the same moment for every driver (network ping is compensated).
+4. **Start lights.** A "5s to the lights" message is shown to everyone. The admin starts the lights, or they start automatically once everyone has stopped. Five red lights come on, then go out after a random delay. They go out at the same moment for every driver (network ping is compensated).
 5. **Jump starts and grid infringements** are penalised automatically when the lights go out and announced in chat.
 6. **Reaction times.** Each driver sees their own reaction time. The admin gets a list of all drivers, ready to paste into Discord.
 
@@ -62,7 +62,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.2/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.3/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -73,7 +73,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.2`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.3`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -158,7 +158,7 @@ All settings go into the `[FR_STANDING_START]` section. Anything you leave out u
 | `JUMP_START_M` | `0.5` | movement before lights out that counts as a jump start |
 | `LIGHTS_COUNT` | `5` | number of lights (1–10) |
 | `LIGHTS_INTERVAL_MS` | `1000` | time between lights |
-| `LIGHTS_LEAD_MS` | `5000` | time from the command to the first light (countdown on screen) |
+| `LIGHTS_LEAD_MS` | `5000` | time from the command to the first light (message on screen) |
 | `HOLD_MIN_MS` / `HOLD_MAX_MS` | `200` / `3000` | random delay before lights out |
 | `AUTO_LIGHTS` | `0` | `1` = start the lights automatically |
 | `AUTO_DELAY_S` | `5` | how long everyone must be stopped |

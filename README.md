@@ -15,7 +15,7 @@ Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwe
    - czerwone: przestrzelone.
 
    Biała linia pokazuje, gdzie ma być przód auta. Czerwona linia to granica, za którą jest kara.
-4. **Światła.** Wszyscy widzą odliczanie „5 s do świateł”. Admin klika „Zapal światła” albo światła zapalają się same, gdy wszyscy stoją (opcja `AUTO_LIGHTS`). Zapala się 5 czerwonych świateł, potem jest losowa przerwa i światła gasną. Każdy komputer liczy światła od chwili, gdy komenda dotarła do serwera (z poprawką na ping), więc u wszystkich gasną jednocześnie.
+4. **Światła.** Wszyscy widzą komunikat „5s do świateł”. Admin klika „Zapal światła” albo światła zapalają się same, gdy wszyscy stoją (opcja `AUTO_LIGHTS`). Zapala się 5 czerwonych świateł, potem jest losowa przerwa i światła gasną. Każdy komputer liczy światła od chwili, gdy komenda dotarła do serwera (z poprawką na ping), więc u wszystkich gasną jednocześnie.
 5. **Falstart i przestrzelenie pola.** Kara jest nakładana w chwili zgaszenia świateł i ogłaszana na czacie. Każdy dostaje też swój czas reakcji.
 
 ### Zasady
@@ -44,7 +44,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.2/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.3/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -57,7 +57,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.2`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.3`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -90,7 +90,7 @@ AUTO_LIGHTS = 0
 | `JUMP_START_M` | `0.5` | ruch, od którego liczy się falstart |
 | `LIGHTS_COUNT` | `5` | liczba świateł (1–10) |
 | `LIGHTS_INTERVAL_MS` | `1000` | odstęp między światłami |
-| `LIGHTS_LEAD_MS` | `5000` | czas od komendy do pierwszego światła (odliczanie na ekranie) |
+| `LIGHTS_LEAD_MS` | `5000` | czas od komendy do pierwszego światła (komunikat na ekranie) |
 | `HOLD_MIN_MS` / `HOLD_MAX_MS` | `200` / `3000` | losowa przerwa przed zgaszeniem |
 | `AUTO_LIGHTS` | `0` | `1` = klient admina sam zapala światła |
 | `AUTO_DELAY_S` | `5` | tyle sekund wszyscy muszą stać |

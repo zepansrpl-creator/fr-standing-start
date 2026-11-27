@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.2'
+local VERSION = '0.2.3'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -145,6 +145,12 @@ function L.gridOrder(splines)
   return idx
 end
 
+-- Czy auto dojechało po formującym na swoje pole (stoi na nim, przed nim, za nim albo obok).
+function L.isArrivedState(st)
+  return st == L.S.IN_SLOT or st == L.S.SHORT or st == L.S.OVERSHOOT or st == L.S.OVERSHOOT_PEN
+    or st == L.S.WRONG_LANE
+end
+
 -- Czy meldunek auta oznacza, że procedura startu (formujące / ustawianie) jeszcze trwa.
 function L.isProcedureState(st)
   return st == L.S.GRID or st == L.S.FORMATION or st == L.S.APPROACH or st == L.S.IN_SLOT or st == L.S.SHORT
@@ -218,6 +224,10 @@ end
 -- firstReadyAt: kiedy pierwsze auto stanęło na polu (s).
 function L.autoLightsDue(statuses, now, readySince, firstReadyAt, cfg)
   if #statuses == 0 then return false end
+  -- światła tylko wtedy, gdy przynajmniej jedno auto przejechało formujące i stoi na polu
+  local arrived = false
+  for _, s in ipairs(statuses) do if L.isArrivedState(s) then arrived = true break end end
+  if not arrived then return false end
   local allReady = true
   for _, s in ipairs(statuses) do
     if not L.isReadyState(s) then allReady = false break end
@@ -296,7 +306,7 @@ L.TEXT = {
     dns = 'Nie ruszyłeś na okrążenie formujące – czekaj na światła',
     pitStartMsg = 'Startujesz z boksu',
     pitStartFormation = 'Możesz ruszyć do okrążenia formującego, ale startujesz do wyścigu z pitlane',
-    lightsIn = '%d s do świateł',
+    lightsIn = '%ds do świateł',
     autoWaitAll = 'Automat: wszyscy stoją – światła za %d s',
     autoWaitTimeout = 'Automat: czekam na %d aut – światła najpóźniej za %d s',
     autoWaitFirst = 'Automat: czekam, aż pierwsze auto stanie na polu',
@@ -391,7 +401,7 @@ L.TEXT = {
     dns = 'You did not start the formation lap – wait for the lights',
     pitStartMsg = 'You start from the pits',
     pitStartFormation = 'You may drive the formation lap, but you start the race from the pit lane',
-    lightsIn = '%d s to the lights',
+    lightsIn = '%ds to the lights',
     autoWaitAll = 'Auto: everyone stopped – lights in %d s',
     autoWaitTimeout = 'Auto: waiting for %d cars – lights at the latest in %d s',
     autoWaitFirst = 'Auto: waiting for the first car to stop in its slot',
@@ -983,7 +993,11 @@ local function updateFormation(dt)
   me.dist = dist
 
   -- nie ruszył na formujące: stoi na swoim polu od ponad 20 s
-  if me.traveled < 30 and myCar.speedKmh < 1 and gameS() - (me.formationStartAt or gameS()) > 20 then
+  local othersArrived = false
+  for _, st in pairs(statuses) do
+    if st.at >= auto.since and L.isArrivedState(st.state) then othersArrived = true break end
+  end
+  if othersArrived and me.traveled < 30 and myCar.speedKmh < 1 and gameS() - (me.formationStartAt or gameS()) > 20 then
     me.state = L.S.DNS
     me.long, me.lat = dist, lat
     return
@@ -1214,7 +1228,7 @@ local function updateAutoLights()
         local inPits = c.isInPitlane or c.isInPit
         if not L.physicallyReady(st, inPits, c.speedKmh) then st = L.S.FORMATION end
         list[#list + 1] = st
-        if L.isReadyState(st) and st ~= L.S.PIT_START and st ~= L.S.NO_SLOT then anyReady = true end
+        if L.isArrivedState(st) then anyReady = true end
       else
         -- auto bez skryptu / bez meldunku: jeśli jedzie po torze, czekamy na nie
         if not (c.isInPitlane or c.isInPit) and c.speedKmh > 2 then list[#list + 1] = L.S.FORMATION end
@@ -1487,8 +1501,7 @@ function script.drawUI()
   else
     -- odliczanie do pierwszego światła (dla wszystkich)
     if phase == L.P.LIGHTS and lightsT0 and clockMs() < lightsT0 then
-      local secs = math.ceil((lightsT0 - clockMs()) / 1000)
-      banner(T('lightsIn', secs), -60, 30, rgbm.colors.white, rgbm(0, 0, 0, 0.75))
+      banner(T('lightsIn', math.floor(cfg.LIGHTS_LEAD_MS / 1000 + 0.5)), -60, 30, rgbm.colors.white, rgbm(0, 0, 0, 0.75))
     end
     -- startujący z boksu nie widzą świateł startowych, tylko swoje światło wyjazdu z alei
     if phase == L.P.LIGHTS then

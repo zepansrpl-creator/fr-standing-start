@@ -1,5 +1,12 @@
 # Zmiany
 
+## 0.2.3
+
+### Poprawki
+- Automat świateł nie zapala świateł, dopóki przynajmniej jedno auto nie przejedzie formującego i nie stanie na polu; limit czasu liczy się dopiero od tej chwili.
+- Stan „nie ruszył na formujące” dopiero wtedy, gdy inne auta już stoją na polach po formującym (wcześniej kierowcy zwlekający na starcie formującego byli liczeni jako gotowi).
+- Komunikat „5s do świateł” bez odliczania.
+
 ## 0.2.2
 
 ### Nowe funkcje
