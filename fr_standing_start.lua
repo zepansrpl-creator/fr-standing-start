@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.8'
+local VERSION = '0.1.9'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -27,6 +27,7 @@ L.DEFAULTS = {
   ALLOW_REVERSE = 0,           -- 0: liczy się najdalszy punkt (cofanie nie kasuje przestrzelenia)
   OVERSHOOT_PENALTY = 'DRIVE_THROUGH', -- DRIVE_THROUGH / TELEPORT / WARNING
   JUMP_START_PENALTY = 'DRIVE_THROUGH',
+  LATE_PENALTY = 'DRIVE_THROUGH', -- nie dojechał na pole przed zapaleniem świateł
   PENALTY_LAPS = 3,            -- ile okrążeń na odbycie drive-through
   TELEPORT_SECONDS = 10,       -- blokada w boksie przy karze TELEPORT
   JUMP_START_M = 0.5,          -- ruch większy niż tyle przed zgaszeniem świateł = falstart
@@ -100,8 +101,35 @@ function L.travelDelta(prevSpline, newSpline, trackLen)
 end
 
 -- Czy auto zrobiło już większość okrążenia i jest w strefie dojazdu do pola.
-function L.isApproaching(traveled, trackLen, signedDist, cfg)
-  return traveled > trackLen * 0.5 and signedDist > -cfg.APPROACH_ZONE_M and signedDist < 60
+function L.isApproaching(traveled, trackLen, signedDist, cfg, minTravel)
+  return traveled > (minTravel or trackLen * 0.5) and signedDist > -cfg.APPROACH_ZONE_M and signedDist < 60
+end
+
+-- Pola na końcu stawki (dla aut ruszających z boksu).
+-- grid: pola aut na starcie, w kolejności P1..Pn ({pos, look, side, spline});
+-- zwraca pole o numerze n + k. Wzór: pole dwa miejsca wcześniej (ta sama strona) + odstęp rzędu.
+function L.backSlot(grid, k, trackLen)
+  local list = {}
+  for i, g in ipairs(grid) do list[i] = g end
+  local n = #list
+  if n == 0 then return nil end
+  local function sub(a, b) return { x = a.x - b.x, y = a.y - b.y, z = a.z - b.z } end
+  local function add(a, b) return { x = a.x + b.x, y = a.y + b.y, z = a.z + b.z } end
+  for t = n + 1, n + k do
+    local ref = list[t - 2] or list[t - 1]
+    local step
+    if list[t - 4] then step = sub(ref.pos, list[t - 4].pos)
+    else step = { x = -ref.look.x * 8, y = -ref.look.y * 8, z = -ref.look.z * 8 } end
+    if not list[t - 2] then
+      -- tylko jedno auto na polach: drugie pole obok, przesunięte o pół rzędu
+      step = { x = -ref.look.x * 8, y = -ref.look.y * 8, z = -ref.look.z * 8 }
+    end
+    local pos = add(ref.pos, step)
+    local back = -(step.x * ref.look.x + step.y * ref.look.y + step.z * ref.look.z)
+    list[t] = { pos = pos, look = ref.look, side = ref.side, size = ref.size,
+      spline = (ref.spline - back / (trackLen or 4000)) % 1, gridPos = t }
+  end
+  return list[n + k]
 end
 
 -- Ocena stojącego (lub dojeżdżającego) auta względem pola.
@@ -225,7 +253,7 @@ L.TEXT = {
     chatJump = '%s P%d %s: falstart %d ms → %s',
     chatOver = '%s P%d %s: przestrzelone pole o %.1f m → %s',
     chatReaction = '%s P%d %s: reakcja %d ms',
-    chatLate = '%s P%d %s: nie stał na polu przy zapaleniu świateł',
+    chatLate = '%s P%d %s: nie stał na polu przy zapaleniu świateł → %s',
     chatPit = '%s %s: wyjazd z alei przed zgaszeniem świateł → %s',
     penNameDT = 'drive-through', penNameTP = 'teleport do boksów', penNameWarn = 'ostrzeżenie',
     -- panel admina
@@ -247,6 +275,7 @@ L.TEXT = {
     },
     pending = 'kara czeka',
     dns = 'Nie ruszyłeś na okrążenie formujące – czekaj na światła',
+    backOfGrid = 'Ruszyłeś z boksu – startujesz z końca stawki: P%d',
     listTitle = 'Czasy reakcji – %s – %s',
     listJump = 'FALSTART (%d ms za wcześnie)',
     listLate = 'nie stał na polu',
@@ -303,7 +332,7 @@ L.TEXT = {
     chatJump = '%s P%d %s: jump start %d ms → %s',
     chatOver = '%s P%d %s: grid slot overshot by %.1f m → %s',
     chatReaction = '%s P%d %s: reaction %d ms',
-    chatLate = '%s P%d %s: not in slot when the lights came on',
+    chatLate = '%s P%d %s: not in slot when the lights came on → %s',
     chatPit = '%s %s: left the pit lane before lights out → %s',
     penNameDT = 'drive-through', penNameTP = 'teleport to pits', penNameWarn = 'warning',
     adminTitle = 'FR Standing Start – admin',
@@ -323,6 +352,7 @@ L.TEXT = {
     },
     pending = 'penalty pending',
     dns = 'You did not start the formation lap – wait for the lights',
+    backOfGrid = 'You left the pits – you start from the back of the grid: P%d',
     listTitle = 'Reaction times – %s – %s',
     listJump = 'JUMP START (%d ms early)',
     listLate = 'not in slot',
@@ -555,15 +585,47 @@ local function recordSlots()
         side = c.side:clone(),
         spline = c.splinePosition,
         gridPos = c.racePosition,
-        pit = c.isInPitlane,
+        pit = c.isInPitlane or c.isInPit,
+        sessionID = c.sessionID,
         size = c.aabbSize and c.aabbSize:clone() or vec3(2, 1.3, 4.6),
       }
     end
   end
 end
 
+local backSlotsUsed = 0
+
+local function gridList()
+  local list = {}
+  for _, sl in pairs(slots) do if not sl.pit and not sl.back then list[#list + 1] = sl end end
+  table.sort(list, function(a, b) return a.gridPos < b.gridPos end)
+  return list
+end
+
+local function makeBackSlot(k)
+  local trackLen = sim.trackLengthM > 0 and sim.trackLengthM or 4000
+  local b = L.backSlot(gridList(), k, trackLen)
+  if not b then return nil end
+  local p = vec3(b.pos.x, b.pos.y, b.pos.z)
+  local slot = { pos = p, look = b.look, side = b.side, spline = b.spline, gridPos = b.gridPos,
+    size = b.size or vec3(2, 1.3, 4.6), back = true }
+  slot.groundY = groundY(p)
+  return slot
+end
+
 local function freezeSlots()
-  for _, s in pairs(slots) do s.groundY = groundY(s.pos) end
+  -- numeracja: auta na polach P1..Pn (kolejność z kwalifikacji), auta w boksie dostają pola na końcu
+  local list = gridList()
+  for i, sl in ipairs(list) do sl.gridPos = i end
+  local pits = {}
+  for idx, sl in pairs(slots) do if sl.pit then pits[#pits + 1] = { idx = idx, sid = sl.sessionID or idx } end end
+  table.sort(pits, function(a, b) return a.sid < b.sid end)
+  for k, e in ipairs(pits) do
+    local b = makeBackSlot(k)
+    if b then b.pit = true; slots[e.idx] = b end
+  end
+  backSlotsUsed = #pits
+  for _, s in pairs(slots) do if not s.groundY then s.groundY = groundY(s.pos) end end
   local s = slots[0]
   if s then
     log(string.format('pole P%d zapisane, spline %.4f', s.gridPos, s.spline))
@@ -652,7 +714,8 @@ local function finishStart()
     end
   end
   if me.late then
-    chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name))
+    chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name,
+      penaltyText(L.parsePenalty(cfg.LATE_PENALTY, cfg))))
   end
   if me.jumpMs then reportReaction(me.jumpMs, true, me.pitStart, false)
   elseif me.late then reportReaction(0, false, false, true)
@@ -780,6 +843,23 @@ local function updateFormation(dt)
     end
   end
 
+  -- ruszył z boksu na okrążenie formujące → pole na końcu stawki
+  if me.pitStart and not myCar.isInPitlane and not myCar.isInPit then
+    local sl = slots[0]
+    if not (sl and sl.back) then
+      backSlotsUsed = backSlotsUsed + 1
+      sl = makeBackSlot(backSlotsUsed)
+      slots[0] = sl
+    end
+    if sl then
+      me.pitStart = false
+      me.backOfGrid = true
+      me.traveled = 0
+      me.prevSpline = myCar.splinePosition
+      me.maxLong = -1e9
+      notify(T('backOfGrid', sl.gridPos), 8, rgbm.colors.yellow)
+    end
+  end
   if me.pitStart or not slots[0] then
     me.state = me.pitStart and L.S.PIT_START or L.S.NO_SLOT
     return
@@ -803,13 +883,13 @@ local function updateFormation(dt)
   me.dist = dist
 
   -- nie ruszył na formujące: stoi na swoim polu od ponad 20 s
-  if me.traveled < 30 and myCar.speedKmh < 1 and gameS() - (me.formationStartAt or gameS()) > 20 then
+  if not me.backOfGrid and me.traveled < 30 and myCar.speedKmh < 1 and gameS() - (me.formationStartAt or gameS()) > 20 then
     me.state = L.S.DNS
     me.long, me.lat = dist, lat
     return
   end
 
-  if L.isApproaching(me.traveled, trackLen, dist, cfg) then
+  if L.isApproaching(me.traveled, trackLen, dist, cfg, me.backOfGrid and 150 or nil) then
     me.long, me.lat = dist, lat
     -- w którą stronę do środka pola: oś „w prawo” z pozycji kół (przednie prawe − przednie lewe)
     local wh = myCar.wheels
@@ -841,10 +921,15 @@ local function updateLights()
       me.lanePenalty = math.abs(me.lat)
       me.pending = L.stronger(me.pending, L.parsePenalty(cfg.OVERSHOOT_PENALTY, cfg))
     end
-    if not me.wasStopped and not me.pitStart and slots[0] then
+    local notThere = me.state == L.S.FORMATION or me.state == L.S.APPROACH or me.state == L.S.LATE
+    if not me.pitStart and slots[0] and (notThere or not me.wasStopped) then
       me.late = true
       me.state = L.S.LATE
-      notify(T('late'), 6, rgbm.colors.yellow)
+      me.wasStopped = false -- spóźniony: ruch w trakcie świateł nie jest liczony jako falstart
+      if not me.pardoned then
+        me.pending = L.stronger(me.pending, L.parsePenalty(cfg.LATE_PENALTY, cfg))
+      end
+      notify(T('late'), 6, rgbm.colors.red)
     end
   end
   -- falstart

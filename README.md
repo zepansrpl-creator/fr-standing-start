@@ -30,9 +30,10 @@ Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwe
 | Cofnięcie po przestrzeleniu do 10 m | można poprawić ustawienie |
 | Cofnięcie po przestrzeleniu ponad 10 m | kara zostaje (liczy się najdalszy punkt) |
 | Ruch ponad 0,5 m przed zgaszeniem świateł | **falstart → drive-through** |
-| Start z alei serwisowej | wyjazd z alei przed zgaszeniem świateł = falstart |
+| Wyjazd z boksu na okrążenie formujące | pole na końcu stawki |
+| Start z alei serwisowej (zostaje w boksie) | wyjazd z alei po zapaleniu, a przed zgaszeniem świateł = falstart |
 | Wjazd do alei w trakcie formującego | start z alei |
-| Jechałeś, gdy zapaliło się pierwsze światło | wpis „spóźniony” na czacie, decyzja admina |
+| Nie stałeś na polu, gdy zapaliło się pierwsze światło | **drive-through** |
 | Dołączenie po starcie | brak pola, start z alei |
 
 Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surowszą. Na czacie są opisane obie.
@@ -43,7 +44,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.8/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.9/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -56,7 +57,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.8`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.1.9`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -77,6 +78,7 @@ AUTO_LIGHTS = 0
 | `ALLOW_REVERSE` | `0` | `1` = cofnięcie poprawia ustawienie |
 | `OVERSHOOT_PENALTY` | `DRIVE_THROUGH` | `DRIVE_THROUGH` / `TELEPORT` / `WARNING` |
 | `JUMP_START_PENALTY` | `DRIVE_THROUGH` | jak wyżej |
+| `LATE_PENALTY` | `DRIVE_THROUGH` | kara za brak na polu przy zapaleniu świateł |
 | `PENALTY_LAPS` | `3` | okrążenia na odbycie drive-through |
 | `TELEPORT_SECONDS` | `10` | blokada w boksie przy karze `TELEPORT` |
 | `JUMP_START_M` | `0.5` | ruch, od którego liczy się falstart |

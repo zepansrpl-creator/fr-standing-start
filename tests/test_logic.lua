@@ -126,5 +126,24 @@ check('lista: kolejność wg czasu', txt:find('1%. A %(P1%) – 0%.210 s') and t
 check('lista: falstart', txt:find('C %(P3%) – FALSTART %(90 ms') ~= nil)
 check('lista: start z alei', txt:find('D %(P4%) – start z alei') ~= nil)
 
+-- pola na końcu stawki
+local look1, side1 = { x = 0, y = 0, z = 1 }, { x = 1, y = 0, z = 0 }
+local grid = {
+  { pos = { x = -1.5, y = 0, z = 0 }, look = look1, side = side1, spline = 0.99 },
+  { pos = { x = 1.5, y = 0, z = -4 }, look = look1, side = side1, spline = 0.989 },
+  { pos = { x = -1.5, y = 0, z = -8 }, look = look1, side = side1, spline = 0.988 },
+  { pos = { x = 1.5, y = 0, z = -12 }, look = look1, side = side1, spline = 0.987 },
+}
+local b1 = L.backSlot(grid, 1, 1000)
+check('P5 za P3 po tej samej stronie', near(b1.pos.x, -1.5) and near(b1.pos.z, -16))
+local b2 = L.backSlot(grid, 2, 1000)
+check('P6 za P4 po tej samej stronie', near(b2.pos.x, 1.5) and near(b2.pos.z, -20))
+check('numer pola P6', b2.gridPos == 6)
+check('splajn pola P5 za P3', near(b1.spline, 0.988 - 8 / 1000))
+local single = L.backSlot({ grid[1] }, 1, 1000)
+check('jedno auto: pole 8 m za nim', near(single.pos.z, -8))
+check('pusta stawka: brak pola', L.backSlot({}, 1, 1000) == nil)
+check('kara za spóźnienie domyślnie DT', L.parsePenalty(cfg.LATE_PENALTY, cfg).kind == 'dt')
+
 print(string.format('logika: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

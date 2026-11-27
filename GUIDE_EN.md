@@ -31,10 +31,11 @@ It is a **CSP online script**. Server admins only add a few lines to the server 
 | More than 0.5 m to the side of the slot | warning with arrow and yellow guide line on the tarmac |
 | More than 2 m to the side when the lights come on | **drive-through** |
 | Moving more than 0.5 m before the lights go out | **jump start → drive-through** |
-| Pit lane start, leaving the pit lane before lights out | **jump start → drive-through** |
+| Leaving the pits for the formation lap | grid slot at the back of the grid |
+| Pit lane start (staying in the pits), leaving after the lights come on but before lights out | **jump start → drive-through** |
 | Entering the pit lane (or being moved to the pits) during the formation lap | pit lane start |
 | Not moving off for the formation lap | counted as ready, admin decides |
-| Still moving when the first light comes on | marked "late" in chat, admin decides |
+| Not in your grid slot when the first light comes on | **drive-through** |
 | Joined after the start | no grid slot, pit lane start |
 
 A **drive-through** must be served within 3 laps by driving through the pit lane **without stopping**. A pit stop does not count. The driver sees how many laps are left. Serving (or not serving) the penalty is shown on screen and in chat.
@@ -59,7 +60,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.8/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.9/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -70,7 +71,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.1.8`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.1.9`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -143,6 +144,7 @@ All settings go into the `[FR_STANDING_START]` section. Anything you leave out u
 | `ALLOW_REVERSE` | `0` | `1` = reversing also cancels a large overshoot |
 | `OVERSHOOT_PENALTY` | `DRIVE_THROUGH` | `DRIVE_THROUGH`, `TELEPORT` or `WARNING` |
 | `JUMP_START_PENALTY` | `DRIVE_THROUGH` | same options |
+| `LATE_PENALTY` | `DRIVE_THROUGH` | not in your slot when the lights come on |
 | `PENALTY_LAPS` | `3` | laps allowed to serve a drive-through |
 | `TELEPORT_SECONDS` | `10` | time held in the pits for `TELEPORT` |
 | `JUMP_START_M` | `0.5` | movement before lights out that counts as a jump start |

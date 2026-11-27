@@ -1,5 +1,11 @@
 # Zmiany
 
+## 0.1.9
+
+### Nowe funkcje
+- Kierowca, który rusza na okrążenie formujące z boksu, dostaje pole na końcu stawki (oznaczone tak jak inne pola).
+- Kara drive-through dla kierowcy, który nie zdążył na swoje pole przed zapaleniem świateł (ustawienie `LATE_PENALTY`).
+
 ## 0.1.8
 
 ### Poprawki

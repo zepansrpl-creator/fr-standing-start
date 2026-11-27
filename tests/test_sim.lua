@@ -506,5 +506,53 @@ for _, t in ipairs(texts) do if t:find('START Z ALEI') then pit = true end end
 check('S20: auto w boksie = start z alei', pit)
 ui.dwriteDrawText = old
 
+---------------------------------------------------------------- scenariusz 21: wyjazd z boksu na formujące = pole na końcu stawki
+setup(nil)
+env.cars[0].isInPitlane = true
+moveCar(env.cars[0], 0.90, 0) -- auto stoi w alei
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+local texts21 = {}
+local old21 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) texts21[#texts21 + 1] = t end
+-- wyjeżdża z alei w trakcie formującego
+env.cars[0].isInPitlane = false
+moveCar(env.cars[0], 0.92, 60); frame(50)
+local back = false
+for _, t in ipairs(texts21) do if t:find('końca stawki: P2') then back = true end end
+check('S21: komunikat o polu na końcu stawki (P2)', back)
+-- jedzie dookoła i staje 8 m za polem auta 1 (pole P2)
+local s1 = 0.975 -- splajn auta 1 (P1)
+local target = s1 - 8 / TRACK + 1
+local sp = 0.92
+while sp < target do
+  sp = math.min(target, sp + 20 / 3.6 * 0.05 / TRACK * 3)
+  moveCar(env.cars[0], sp, (target - sp) * TRACK < 30 and 10 or 60); frame(50)
+end
+env.cars[0].lat = 1.5 -- pole P2 jest po stronie auta 1 (lat 1.5)
+moveCar(env.cars[0], target, 0)
+texts21 = {}
+for _ = 1, 10 do frame(50) end
+local stop = false
+for _, t in ipairs(texts21) do if t:find('STOP') then stop = true end end
+check('S21: stoi na polu na końcu stawki', stop)
+ui.dwriteDrawText = old21
+press('Zapal światła')
+for _ = 1, 300 do frame(50) end
+check('S21: bez kary', #env.penalties == 0)
+
+---------------------------------------------------------------- scenariusz 22: jedzie w trakcie świateł (nie zdążył na pole) = DT
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+moveCar(env.cars[0], 0.5, 70); frame(50)
+press('Zapal światła')
+for _ = 1, 300 do moveCar(env.cars[0], env.cars[0].splinePosition + 0.0005, 70); frame(50) end
+local late = false
+for _, m in ipairs(env.chats) do if m:find('nie stał na polu') and m:find('drive%-through') then late = true end end
+check('S22: spóźniony dostaje drive-through', late and #env.penalties == 1 and env.penalties[1][1] == 1)
+
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)
