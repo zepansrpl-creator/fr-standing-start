@@ -479,6 +479,7 @@ for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
 -- auto 1: przeniesione do boksu → melduje start z alei; auto 2: nie ruszyło → melduje „nie ruszył”
+env.cars[1].isInPitlane = true
 env.events[1].cb(env.cars[1], { state = 8, offsetCm = 0, pending = 0 })
 env.events[1].cb(env.cars[2], { state = 13, offsetCm = 0, pending = 0 })
 driveFormation(0.0)
@@ -617,6 +618,46 @@ local info = false
 for _, t in ipairs(tx27) do if t:find('START Z BOKSU') then info = true end end
 check('S27: dołączający w trakcie formującego widzi start z boksu', info)
 ui.dwriteDrawText = old27
+
+---------------------------------------------------------------- scenariusz 28: dołączenie w trakcie formującego bez admina (z meldunków innych aut)
+setup(nil)
+env.sim.isAdmin = false
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 30000
+for _ = 1, 3 do frame(50) end
+env.events[1].cb(env.cars[1], { state = 3, offsetCm = 0, pending = 0 }) -- inne auto dojeżdża do pola
+local tx28 = {}
+local old28 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) tx28[#tx28 + 1] = t end
+frame(50); frame(50)
+local info28 = false
+for _, t in ipairs(tx28) do if t:find('BOKSU') then info28 = true end end
+check('S28: dołączający widzi start z boksu bez admina', info28)
+ui.dwriteDrawText = old28
+
+---------------------------------------------------------------- scenariusz 29: automat nie zapala świateł, gdy ktoś jedzie po torze
+setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 2, AUTO_TIMEOUT_S = 600 })
+env.cars[2] = makeCar(2, 0.5, 0); env.sim.carsCount = 3
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+env.events[1].cb(env.cars[1], { state = 4, offsetCm = 0, pending = 0 })
+-- auto 2 dołączyło w trakcie i melduje „brak pola”, ale jedzie po torze
+env.cars[2].speedKmh = 150
+env.events[1].cb(env.cars[2], { state = 9, offsetCm = 0, pending = 0 })
+driveFormation(0.0)
+env.red = 0
+for _ = 1, 400 do frame(50) end -- 20 s
+check('S29: brak świateł, gdy auto bez pola jedzie po torze', (env.red or 0) == 0)
+-- auto z meldunkiem „na polu”, które jednak jedzie
+env.cars[2].speedKmh = 0; env.cars[2].isInPitlane = true
+env.cars[1].speedKmh = 60
+env.red = 0
+for _ = 1, 200 do frame(50) end
+check('S29: brak świateł, gdy auto z meldunkiem „na polu” jedzie', (env.red or 0) == 0)
+env.cars[1].speedKmh = 0
+local seen29 = false
+for _ = 1, 300 do env.red = 0; frame(50); if env.red > 0 then seen29 = true end end
+check('S29: światła, gdy wszyscy naprawdę stoją', seen29)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

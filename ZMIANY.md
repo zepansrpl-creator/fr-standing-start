@@ -1,5 +1,11 @@
 # Zmiany
 
+## 0.2.1
+
+### Poprawki
+- Automat świateł czeka na auta, które jadą po torze – meldunek „gotowy” liczy się tylko, gdy auto naprawdę stoi na polu albo jest w alei.
+- Kierowca dołączający w trakcie formującego dostaje informację o starcie z boksu także bez admina na serwerze (z meldunków innych aut); admin dodatkowo co 10 s przypomina fazę startu.
+
 ## 0.2.0
 
 ### Nowe funkcje

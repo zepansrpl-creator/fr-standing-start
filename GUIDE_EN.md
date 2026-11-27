@@ -40,7 +40,7 @@ It is a **CSP online script**. Server admins only add a few lines to the server 
 
 A **stop & go** is served by stopping in your own pit box for 10 s; the car is held on the brakes and a countdown is shown. A **drive-through** must be served within 3 laps by driving through the pit lane **without stopping**. A pit stop does not count. The driver sees how many laps are left. Serving (or not serving) the penalty is shown on screen and in chat.
 
-Drivers who join during the start procedure see that they start from the pits (requires an admin to be connected).
+Drivers who join during the start procedure see that they start from the pits.
 
 All values can be changed (see [All settings](#all-settings)).
 
@@ -62,7 +62,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.0/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.1/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -73,7 +73,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.0`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.1`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 

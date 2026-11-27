@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.0'
+local VERSION = '0.2.1'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -142,6 +142,20 @@ function L.gridOrder(splines)
   local ref = splines[1]
   table.sort(idx, function(a, b) return L.splineDelta(splines[a], ref) > L.splineDelta(splines[b], ref) end)
   return idx
+end
+
+-- Czy meldunek auta oznacza, że procedura startu (formujące / ustawianie) jeszcze trwa.
+function L.isProcedureState(st)
+  return st == L.S.GRID or st == L.S.FORMATION or st == L.S.APPROACH or st == L.S.IN_SLOT or st == L.S.SHORT
+    or st == L.S.OVERSHOOT or st == L.S.OVERSHOOT_PEN or st == L.S.WRONG_LANE or st == L.S.DNS or st == L.S.PIT_OUT
+end
+
+-- Czy auto naprawdę czeka na start: meldunek „gotowy” i auto stoi (albo jest w alei).
+function L.physicallyReady(st, inPits, speedKmh)
+  if not L.isReadyState(st) then return false end
+  if inPits then return true end
+  if st == L.S.NO_SLOT or st == L.S.PIT_START then return false end -- bez pola / z boksu, a jest na torze
+  return speedKmh < 2
 end
 
 -- Czy auto minęło punkt toru (np. T1) – dodatnia różnica na splajnie (do pół okrążenia).
@@ -609,7 +623,7 @@ local function pushStatus(force)
   local t = gameS()
   local changed = me.state ~= me.lastSentState or math.abs(offsetCm - me.lastSentOffset) >= 20
   if (changed and t - me.lastSentAt >= 1) or force then
-    if sendStatus({ state = me.state, offsetCm = offsetCm, pending = pend }) then
+    if sendStatus({ state = me.state, offsetCm = offsetCm, pending = pend }, true) then
       me.lastSentState, me.lastSentAt, me.lastSentOffset = me.state, t, offsetCm
     end
   end
@@ -795,24 +809,41 @@ onCommand = function(sender, data)
 end
 
 -- Kierowca dołączył w trakcie procedury startu: dowiaduje się o fazie od admina.
+local phaseInfo = nil -- ostatnia faza ogłoszona przez admina
 onPhase = function(sender, data)
   if sender and sender.index == 0 then return end
   if data.released == 1 then pitReleased = true end
-  if sim.raceSessionType ~= ac.SessionType.Race or slots[0] then return end
-  -- tylko kierowca bez pola (dołączył po starcie z gry), gdy procedura startu jeszcze trwa
-  if me.state == L.S.NO_SLOT and not (data.phase == L.P.RACING and data.released == 1) then
-    me.pitStart = true
-    if data.phase == L.P.FORMATION then
-      phase = L.P.FORMATION
-      me.state = (myCar.isInPitlane or myCar.isInPit) and L.S.PIT_START or L.S.PIT_OUT
-    else
-      phase = L.P.RACING
-      me.pitWait = not pitReleased
-      me.state = L.S.PIT_START
+  phaseInfo = { phase = data.phase, released = data.released }
+end
+
+-- Kierowca bez pola (dołączył po starcie z gry): jeśli procedura startu trwa, startuje z boksu.
+-- Wiadomo to z ogłoszenia admina albo z meldunków innych aut.
+local function checkLateJoin()
+  if me.state ~= L.S.NO_SLOT or slots[0] then return end
+  local ongoing, lights = false, false
+  if phaseInfo then
+    if phaseInfo.phase == L.P.FORMATION then ongoing = true
+    elseif phaseInfo.phase == L.P.LIGHTS or (phaseInfo.phase == L.P.RACING and phaseInfo.released == 0) then
+      ongoing, lights = true, true
     end
-    notify(T('pitStartMsg'), 8, rgbm.colors.yellow)
-    log('dołączenie w trakcie startu: start z boksu')
+  else
+    for _, st in pairs(statuses) do
+      if L.isProcedureState(st.state) then ongoing = true end
+    end
   end
+  if not ongoing then return end
+  me.pitStart = true
+  if lights then
+    phase = L.P.RACING
+    me.pitWait = not pitReleased
+    me.state = L.S.PIT_START
+  else
+    phase = L.P.FORMATION
+    me.state = (myCar.isInPitlane or myCar.isInPit) and L.S.PIT_START or L.S.PIT_OUT
+  end
+  notify(T('pitStartMsg'), 10, rgbm.colors.yellow)
+  pushStatus(true)
+  log('dołączenie w trakcie startu: start z boksu')
 end
 
 local function adminSend(cmd, target)
@@ -1145,8 +1176,14 @@ local function updateAutoLights()
         st = statuses[i].at >= auto.since and statuses[i].state or L.S.FORMATION
       end
       if st then
+        -- meldunek „gotowy” liczy się tylko, gdy auto faktycznie stoi albo jest w alei
+        local inPits = c.isInPitlane or c.isInPit
+        if not L.physicallyReady(st, inPits, c.speedKmh) then st = L.S.FORMATION end
         list[#list + 1] = st
         if L.isReadyState(st) and st ~= L.S.PIT_START and st ~= L.S.NO_SLOT then anyReady = true end
+      else
+        -- auto bez skryptu / bez meldunku: jeśli jedzie po torze, czekamy na nie
+        if not (c.isInPitlane or c.isInPit) and c.speedKmh > 2 then list[#list + 1] = L.S.FORMATION end
       end
     end
   end
@@ -1196,13 +1233,21 @@ function script.update(dt)
     -- skrypt wczytany po starcie wyścigu: brak pól
     phase = L.P.RACING
     me.state = L.S.NO_SLOT
+    me.joinedAt = gameS()
   elseif phase == L.P.FORMATION then
     updateFormation(dt)
     updateAutoLights()
   elseif phase == L.P.LIGHTS then
     updateLights()
   elseif phase == L.P.RACING then
+    if me.state == L.S.NO_SLOT then checkLateJoin() end
     updateRacing(dt)
+  end
+
+  -- admin co 10 s powtarza ogłoszenie fazy (dla dołączających w trakcie startu)
+  if isAdmin() and phase ~= L.P.IDLE and gameS() - (me.lastPhaseCast or -100) > 10 then
+    me.lastPhaseCast = gameS()
+    broadcastPhase()
   end
 
   pushStatus(false)
