@@ -88,7 +88,7 @@ local dt, tp = L.parsePenalty('DT', cfg), L.parsePenalty('TELEPORT', cfg)
 check('surowsza kara', L.stronger(dt, tp) == tp and L.stronger(tp, dt) == tp and L.stronger(nil, dt) == dt)
 
 -- automat świateł
-local cfgA = L.readConfig(function(k) if k == 'AUTO_LIGHTS' then return 1 end end)
+local cfgA = L.readConfig(function(k) if k == 'AUTO_LIGHTS' then return 1 end if k == 'AUTO_DELAY_S' then return 5 end end)
 check('automat: nie wszyscy gotowi', not L.autoLightsDue({ S.IN_SLOT, S.APPROACH }, 100, nil, 99, cfgA))
 check('automat: wszyscy, za krótko', not L.autoLightsDue({ S.IN_SLOT, S.PIT_START }, 100, 98, 90, cfgA))
 check('automat: wszyscy 5 s', L.autoLightsDue({ S.IN_SLOT, S.PIT_START }, 100, 95, 90, cfgA))

@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.4'
+local VERSION = '0.2.5'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -43,7 +43,7 @@ L.DEFAULTS = {
   HOLD_MIN_MS = 200,           -- losowa przerwa po zapaleniu wszystkich świateł
   HOLD_MAX_MS = 3000,
   AUTO_LIGHTS = 0,             -- 1: klient admina sam zapala światła, gdy wszyscy stoją
-  AUTO_DELAY_S = 5,            -- ile sekund wszyscy muszą stać, zanim ruszą światła
+  AUTO_DELAY_S = 0,            -- dodatkowe sekundy czekania, gdy wszyscy stoją (komunikat „5s do świateł” jest i tak)
   AUTO_TIMEOUT_S = 60,         -- po tylu sekundach od pierwszego auta na polu światła ruszą i tak
   REPORT_REACTION = 1,         -- 1: czas reakcji każdego kierowcy na czacie
   CHAT_PREFIX = 'FRSS>',
@@ -235,7 +235,7 @@ function L.autoLightsDue(statuses, now, readySince, firstReadyAt, cfg)
     if not L.isReadyState(s) then allReady = false break end
   end
   if allReady and readySince and now - readySince >= cfg.AUTO_DELAY_S then return true end
-  if firstReadyAt and now - firstReadyAt >= cfg.AUTO_TIMEOUT_S then return true end
+  if firstReadyAt and now - firstReadyAt >= cfg.AUTO_TIMEOUT_S - cfg.LIGHTS_LEAD_MS / 1000 then return true end
   return false
 end
 
@@ -273,7 +273,7 @@ L.TEXT = {
     overshootPen = 'PRZESTRZELONE POLE o %.1f m – KARA',
     waitLights = 'Czekaj na światła',
     lights = 'START',
-    late = 'Nie stałeś na polu przy zapaleniu świateł',
+    late = 'Nie stałeś na swoim polu przy zapaleniu świateł – kara',
     aborted = 'START PRZERWANY – dodatkowe okrążenie formujące',
     reaction = 'Reakcja: %d ms',
     jump = 'FALSTART (%d ms przed zgaszeniem)',
@@ -284,7 +284,7 @@ L.TEXT = {
     chatJump = '%s P%d %s: falstart %d ms → %s',
     chatOver = '%s P%d %s: przestrzelone pole o %.1f m → %s',
     chatReaction = '%s P%d %s: reakcja %d ms',
-    chatLate = '%s P%d %s: nie stał na polu przy zapaleniu świateł → %s',
+    chatLate = '%s P%d %s: nie stał na swoim polu przy zapaleniu świateł (%.1f m) → %s',
     chatPit = '%s %s: wyjazd z alei przed zielonym światłem → %s',
     penNameDT = 'drive-through', penNameTP = 'teleport do boksów', penNameWarn = 'ostrzeżenie',
     -- panel admina
@@ -369,7 +369,7 @@ L.TEXT = {
     overshootPen = 'GRID SLOT OVERSHOT by %.1f m – PENALTY',
     waitLights = 'Wait for the lights',
     lights = 'START',
-    late = 'You were not in your slot when the lights came on',
+    late = 'You were not in your slot when the lights came on – penalty',
     aborted = 'START ABORTED – extra formation lap',
     reaction = 'Reaction: %d ms',
     jump = 'JUMP START (%d ms before lights out)',
@@ -380,7 +380,7 @@ L.TEXT = {
     chatJump = '%s P%d %s: jump start %d ms → %s',
     chatOver = '%s P%d %s: grid slot overshot by %.1f m → %s',
     chatReaction = '%s P%d %s: reaction %d ms',
-    chatLate = '%s P%d %s: not in slot when the lights came on → %s',
+    chatLate = '%s P%d %s: not in slot when the lights came on (%.1f m) → %s',
     chatPit = '%s %s: left the pit lane before the green light → %s',
     penNameDT = 'drive-through', penNameTP = 'teleport to pits', penNameWarn = 'warning',
     adminTitle = 'FR Standing Start – admin',
@@ -785,12 +785,10 @@ local function finishStart()
     if me.maxLong > cfg.GRID_WARNING_M then
       chat(string.format(T('chatOver'), cfg.CHAT_PREFIX, n, name, me.maxLong, penaltyText(me.pending)))
     end
-    if me.lanePenalty then
-      chat(string.format(T('chatLane'), cfg.CHAT_PREFIX, n, name, me.lanePenalty, penaltyText(me.pending)))
-    end
   end
   if me.late then
-    chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name, penaltyText(me.latePen or L.parsePenalty(cfg.LATE_PENALTY, cfg))))
+    chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name, math.abs(me.dist or 0),
+      penaltyText(me.latePen or L.parsePenalty(cfg.LATE_PENALTY, cfg))))
   end
   if me.jumpMs then reportReaction(me.jumpMs, true, me.pitStart, false)
   elseif me.late then reportReaction(0, false, false, true)
@@ -1033,13 +1031,12 @@ local function updateLights()
   if lit >= 1 and not me.lightsStartPos then
     me.lightsStartPos = myCar.position:clone()
     me.wasStopped = myCar.speedKmh < 1
-    if L.isLanePenalty(me.state, me.lat, cfg) and not me.pardoned then
-      me.lanePenalty = math.abs(me.lat)
-      me.pending = L.stronger(me.pending, L.parsePenalty(cfg.OVERSHOOT_PENALTY, cfg))
-    end
-    local notThere = me.state == L.S.FORMATION or me.state == L.S.APPROACH or me.state == L.S.LATE
-      or me.state == L.S.PIT_OUT
-    if (not me.pitStart and slots[0] and (notThere or not me.wasStopped)) or me.state == L.S.PIT_OUT then
+    -- nie stoi na swoim polu (jedzie, stoi przed nim, za nim albo obok) = kara
+    local st0 = me.state
+    local onSlot = st0 == L.S.IN_SLOT or st0 == L.S.DNS or st0 == L.S.OVERSHOOT_PEN
+    if st0 == L.S.SHORT or st0 == L.S.OVERSHOOT then me.dist = me.long
+    elseif st0 == L.S.WRONG_LANE then me.dist = math.abs(me.lat or 0) end
+    if (not me.pitStart and slots[0] and (not onSlot or not me.wasStopped)) or st0 == L.S.PIT_OUT then
       me.late = true
       me.state = L.S.LATE
       me.wasStopped = false -- spóźniony: ruch w trakcie świateł nie jest liczony jako falstart
@@ -1427,7 +1424,7 @@ end
 
 local function drawLights()
   local lit, out = L.lightsState(clockMs(), lightsT0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, lightsHold)
-  if out then return end
+  if out or clockMs() < lightsT0 then return end -- przed pierwszym światłem jest napis „5s do świateł”
   local w = screen()
   local n = cfg.LIGHTS_COUNT
   local r, gap = 26, 18
@@ -1503,7 +1500,11 @@ function script.drawUI()
   else
     -- odliczanie do pierwszego światła (dla wszystkich)
     if phase == L.P.LIGHTS and lightsT0 and clockMs() < lightsT0 then
-      banner(T('lightsIn', math.floor(cfg.LIGHTS_LEAD_MS / 1000 + 0.5)), -60, 30, rgbm.colors.white, rgbm(0, 0, 0, 0.75))
+      local text = T('lightsIn', math.floor(cfg.LIGHTS_LEAD_MS / 1000 + 0.5))
+      local w = screen()
+      local ts = ui.measureDWriteText(text, 40)
+      ui.drawRectFilled(vec2(w / 2 - ts.x / 2 - 24, 60), vec2(w / 2 + ts.x / 2 + 24, 70 + ts.y + 10), rgbm(0, 0, 0, 0.8), 10)
+      ui.dwriteDrawText(text, 40, vec2(w / 2 - ts.x / 2, 70), rgbm.colors.white)
     end
     -- startujący z boksu nie widzą świateł startowych, tylko swoje światło wyjazdu z alei
     if phase == L.P.LIGHTS then
@@ -1545,9 +1546,6 @@ function script.drawUI()
         banner(T('late'), 0, 24, rgbm.colors.yellow)
       elseif st == L.S.DNS then
         banner(T('dns'), 0, 24, rgbm.colors.yellow)
-      end
-      if phase == L.P.LIGHTS and st ~= L.S.LATE and not me.pitStart then
-        banner(T('waitLights'), 60, 18)
       end
     elseif phase == L.P.RACING then
       drawPitLight()

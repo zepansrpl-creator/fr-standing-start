@@ -1,5 +1,13 @@
 # Zmiany
 
+## 0.2.5
+
+### Poprawki
+- Kara (DT, a ponad 20 m stop & go) dla każdego, kto przy zapaleniu świateł nie stoi na swoim polu – także stojąc przed polem, za nim albo obok.
+- „5s do świateł” wyświetla się w miejscu świateł, przez ostatnie 5 s przed pierwszym światłem – także przy limicie czasu automatu (światła zapalają się dokładnie po 60 s).
+- Gdy wszyscy stoją poprawnie, automat od razu pokazuje „5s do świateł” (bez dodatkowych 5 s czekania).
+- Usunięty napis „Czekaj na światła” pod światłami.
+
 ## 0.2.4
 
 ### Poprawki

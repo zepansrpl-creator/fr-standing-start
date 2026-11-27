@@ -23,18 +23,17 @@ Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwe
 | Sytuacja | Co się dzieje (domyślnie) |
 |---|---|
 | Stoisz do 0,5 m przed/za linią pola | OK |
-| Za daleko o 0,5–10 m | ostrzeżenie, bez kary |
+| Za daleko o 0,5–10 m | ostrzeżenie – trzeba cofnąć na pole przed światłami |
 | Za daleko o ponad 10 m | **drive-through** (3 okrążenia na odbycie) |
 | Obok pola (w lewo/prawo) o ponad 0,5 m | komunikat ze strzałką „← w lewo / w prawo →” i żółta strzałka na asfalcie |
-| Obok pola o ponad 2 m przy zapaleniu świateł | **drive-through** |
 | Cofnięcie po przestrzeleniu do 10 m | można poprawić ustawienie |
 | Cofnięcie po przestrzeleniu ponad 10 m | kara zostaje (liczy się najdalszy punkt) |
 | Ruch ponad 0,5 m przed zgaszeniem świateł | **falstart → drive-through** |
 | Start z boksu (auto w alei/boksie przy starcie z gry, wjazd do alei na formującym albo dołączenie w trakcie procedury) | może przejechać formujące, ale przed światłami musi wrócić do alei; nie widzi świateł startowych, tylko swoje światło wyjazdu; wyjazd dopiero na **zielone**, gdy cała stawka minie punkt 500 m od startu albo po 30 s |
 | Start z boksu: wyjazd z alei przed zielonym | **drive-through** |
 | Start z boksu: poza aleją przy zapaleniu świateł | **drive-through** |
-| Nie stałeś na polu przy zapaleniu świateł, do 20 m od pola | **drive-through** |
-| Nie stałeś na polu przy zapaleniu świateł, ponad 20 m od pola | **stop & go 10 s** (postój w swoim boksie; auto trzymane na hamulcu do końca kary) |
+| Nie stoisz na swoim polu przy zapaleniu świateł (jedziesz, stoisz przed polem, za nim albo obok), do 20 m od pola | **drive-through** |
+| Nie stoisz na swoim polu przy zapaleniu świateł, ponad 20 m od pola | **stop & go 10 s** (postój w swoim boksie; auto trzymane na hamulcu do końca kary) |
 
 Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surowszą. Na czacie są opisane obie.
 
@@ -44,7 +43,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.4/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.5/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -57,7 +56,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.4`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.5`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -74,7 +73,6 @@ AUTO_LIGHTS = 0
 | `GRID_TOLERANCE_M` | `0.5` | tolerancja ustawienia |
 | `GRID_WARNING_M` | `10.0` | powyżej tego przestrzelenie = kara |
 | `LATERAL_TOLERANCE_M` | `0.5` | tyle można stać obok środka pola |
-| `LATERAL_PENALTY_M` | `2.0` | stanie dalej obok pola przy zapaleniu świateł = kara |
 | `ALLOW_REVERSE` | `0` | `1` = cofnięcie poprawia ustawienie |
 | `OVERSHOOT_PENALTY` | `DRIVE_THROUGH` | `DRIVE_THROUGH` / `STOP_GO` / `TELEPORT` / `WARNING` |
 | `JUMP_START_PENALTY` | `DRIVE_THROUGH` | jak wyżej |
@@ -93,7 +91,7 @@ AUTO_LIGHTS = 0
 | `LIGHTS_LEAD_MS` | `5000` | czas od komendy do pierwszego światła (komunikat na ekranie) |
 | `HOLD_MIN_MS` / `HOLD_MAX_MS` | `200` / `3000` | losowa przerwa przed zgaszeniem |
 | `AUTO_LIGHTS` | `0` | `1` = klient admina sam zapala światła |
-| `AUTO_DELAY_S` | `5` | tyle sekund wszyscy muszą stać |
+| `AUTO_DELAY_S` | `0` | dodatkowe czekanie, gdy wszyscy stoją (po nim „5s do świateł”) |
 | `AUTO_TIMEOUT_S` | `60` | po tylu sekundach od pierwszego auta na polu światła ruszą i tak |
 | `REPORT_REACTION` | `1` | czas reakcji na czacie (każdy widzi tylko swój) |
 | `CHAT_PREFIX` | `FRSS>` | początek wpisów na czacie, przyda się później do logu |

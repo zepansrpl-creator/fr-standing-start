@@ -26,16 +26,15 @@ It is a **CSP online script**. Server admins only add a few lines to the server 
 | Situation | Result |
 |---|---|
 | Within 0.5 m of the slot line | OK |
-| Overshot by 0.5–10 m | warning only, can reverse back into the slot |
+| Overshot by 0.5–10 m | warning – reverse back into the slot before the lights |
 | Overshot by more than 10 m | **drive-through** (reversing does not cancel it) |
 | More than 0.5 m to the side of the slot | warning with arrow and yellow guide line on the tarmac |
-| More than 2 m to the side when the lights come on | **drive-through** |
 | Moving more than 0.5 m before the lights go out | **jump start → drive-through** |
 | Pit start (car in the pits at the game's start, entering the pit lane during the formation lap, or joining during the start procedure) | may drive the formation lap but must be back in the pit lane before the lights; do not see the start lights, only their own pit exit light, and may leave only when it turns **green**, shown once the whole field has passed 500 m from the start, or after 30 s |
 | Pit start: leaving the pit lane before the green light | **drive-through** |
 | Pit start: not in the pit lane when the lights come on | **drive-through** |
 | Not moving off for the formation lap | counted as ready, admin decides |
-| Not in your grid slot when the first light comes on, within 20 m | **drive-through** |
+| Not in your grid slot when the first light comes on (moving, short of it, past it or beside it), within 20 m | **drive-through** |
 | Not in your grid slot when the first light comes on, more than 20 m away | **stop & go 10 s** (stop in your pit box; the car is held on the brakes until the time is up) |
 
 A **stop & go** is served by stopping in your own pit box for 10 s; the car is held on the brakes and a countdown is shown. A **drive-through** must be served within 3 laps by driving through the pit lane **without stopping**. A pit stop does not count. The driver sees how many laps are left. Serving (or not serving) the penalty is shown on screen and in chat.
@@ -62,7 +61,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.4/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.5/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -73,7 +72,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.4`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.5`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -116,7 +115,7 @@ Chat commands (admin only, hidden from other drivers):
 | `!frss skip` | skip the formation lap (test) |
 | `!frss reactions` | copy the reaction time list to the clipboard |
 
-**Automatic lights:** with `AUTO_LIGHTS = 1`, the admin's game starts the lights 5 s after every car is correctly in its slot (or in the pit lane), or at the latest 60 s after the first car arrived at its slot. Cars parked short of, beside or slightly past their slot keep the full 60 s to correct it. An admin must be connected for this to work.
+**Automatic lights:** with `AUTO_LIGHTS = 1`, the admin's game starts the lights as soon as every car is correctly in its slot (or in the pit lane), or at the latest 60 s after the first car arrived at its slot. In both cases "5s to the lights" is shown first. Cars parked short of, beside or slightly past their slot keep the full 60 s to correct it. An admin must be connected for this to work.
 
 ---
 
@@ -142,7 +141,6 @@ All settings go into the `[FR_STANDING_START]` section. Anything you leave out u
 | `GRID_TOLERANCE_M` | `0.5` | allowed distance from the slot line |
 | `GRID_WARNING_M` | `10.0` | overshoot above this = penalty |
 | `LATERAL_TOLERANCE_M` | `0.5` | allowed sideways offset |
-| `LATERAL_PENALTY_M` | `2.0` | sideways offset at the first light above this = penalty |
 | `ALLOW_REVERSE` | `0` | `1` = reversing also cancels a large overshoot |
 | `OVERSHOOT_PENALTY` | `DRIVE_THROUGH` | `DRIVE_THROUGH`, `STOP_GO`, `TELEPORT` or `WARNING` |
 | `JUMP_START_PENALTY` | `DRIVE_THROUGH` | same options |
@@ -161,7 +159,7 @@ All settings go into the `[FR_STANDING_START]` section. Anything you leave out u
 | `LIGHTS_LEAD_MS` | `5000` | time from the command to the first light (message on screen) |
 | `HOLD_MIN_MS` / `HOLD_MAX_MS` | `200` / `3000` | random delay before lights out |
 | `AUTO_LIGHTS` | `0` | `1` = start the lights automatically |
-| `AUTO_DELAY_S` | `5` | how long everyone must be stopped |
+| `AUTO_DELAY_S` | `0` | extra wait once everyone is in place (followed by "5s to the lights") |
 | `AUTO_TIMEOUT_S` | `60` | lights start anyway this long after the first car stopped |
 | `REPORT_REACTION` | `1` | show each driver their reaction time in chat |
 | `CHAT_PREFIX` | `FRSS>` | prefix of the script's chat messages |

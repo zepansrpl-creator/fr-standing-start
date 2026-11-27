@@ -230,6 +230,9 @@ for _ = 1, 5 do frame(50) end
 env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
 frame(50)
 driveFormation(8.0)
+-- cofa na pole przed światłami
+moveCar(env.cars[0], env.cars[0].splinePosition - 7.8 / TRACK, 3); frame(50)
+moveCar(env.cars[0], env.cars[0].splinePosition, 0); for _ = 1, 5 do frame(50) end
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
 check('S3: 8 m = tylko ostrzeżenie', #env.penalties == 0)
@@ -355,7 +358,7 @@ driveFormation(0.0)
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
 local lane = false
-for _, m in ipairs(env.chats) do if m:find('obok pola') then lane = true end end
+for _, m in ipairs(env.chats) do if m:find('nie stał na swoim polu') then lane = true end end
 check('S11: kara za stanie obok pola', #env.penalties == 1 and lane)
 
 ---------------------------------------------------------------- scenariusz 12: drive-through odbyty w alei
@@ -518,7 +521,7 @@ moveCar(env.cars[0], 0.5, 70); frame(50)
 press('Zapal światła')
 for _ = 1, 300 do moveCar(env.cars[0], env.cars[0].splinePosition + 0.0005, 70); frame(50) end
 local late = false
-for _, m in ipairs(env.chats) do if m:find('nie stał na polu') and m:find('stop & go') then late = true end end
+for _, m in ipairs(env.chats) do if m:find('nie stał na swoim polu') and m:find('stop & go') then late = true end end
 check('S22: spóźniony daleko od pola dostaje stop & go', late and #env.penalties == 1 and env.penalties[1][1] == 1)
 -- odbycie: postój w boksie 10 s
 env.cars[0].isInPitlane = true; env.cars[0].isInPit = true; env.cars[0].speedKmh = 0
@@ -540,7 +543,7 @@ moveCar(env.cars[0], 0.980 - 10 / TRACK, 20); frame(50)
 press('Zapal światła')
 for _ = 1, 300 do frame(50) end
 local dt23 = false
-for _, m in ipairs(env.chats) do if m:find('nie stał na polu') and m:find('drive%-through') then dt23 = true end end
+for _, m in ipairs(env.chats) do if m:find('nie stał na swoim polu') and m:find('drive%-through') then dt23 = true end end
 check('S23: spóźniony blisko pola dostaje DT', dt23)
 
 ---------------------------------------------------------------- scenariusz 24: start z boksu – formujące, powrót do alei, zielone po T1
@@ -727,7 +730,7 @@ env.cars[2].speedKmh = 120
 env.events[1].cb(env.cars[2], { state = 14, offsetCm = 0, pending = 0 })
 local litAt33
 for k = 1, 600 do env.red = 0; frame(50); if not litAt33 and env.red > 0 then litAt33 = k end end
-check('S33: światła po limicie czasu (20 s + 3 s), mimo auta z boksu na torze', litAt33 and litAt33 >= 440 and litAt33 <= 480)
+check('S33: światła dokładnie po limicie czasu (20 s), mimo auta z boksu na torze', litAt33 and litAt33 >= 380 and litAt33 <= 420)
 
 ---------------------------------------------------------------- scenariusz 34: wszyscy stoją na starcie formującego – automat nie zapala świateł
 setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 2, AUTO_TIMEOUT_S = 30 })
@@ -750,6 +753,37 @@ local litAt35
 for k = 1, 800 do env.red = 0; frame(50); if not litAt35 and env.red > 0 then litAt35 = k end end
 check('S35: brak świateł po 5 s, gdy ktoś stoi źle', not litAt35 or litAt35 > 200)
 check('S35: światła po limicie czasu', litAt35 ~= nil)
+
+---------------------------------------------------------------- scenariusz 36: stoi przed polem przy zapaleniu świateł = DT
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(-4.6)
+press('Zapal światła')
+for _ = 1, 300 do frame(50) end
+local short36 = false
+for _, m in ipairs(env.chats) do if m:find('nie stał na swoim polu', 1, true) and m:find('(4.6 m)', 1, true) and m:find('drive%-through') then short36 = true end end
+check('S36: 4.6 m przed polem przy światłach = drive-through', short36 and #env.penalties == 1)
+
+---------------------------------------------------------------- scenariusz 37: brak „Czekaj na światła”, „5s do świateł” przed światłami
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+press('Zapal światła')
+local tx37, seen5, seenWait = {}, false, false
+local old37 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) tx37[#tx37 + 1] = t end
+for _ = 1, 120 do frame(50) end
+for _, t in ipairs(tx37) do
+  if t:find('5s do świateł') or t:find('3s do świateł') then seen5 = true end
+  if t:find('Czekaj na światła') then seenWait = true end
+end
+check('S37: komunikat przed światłami', seen5)
+check('S37: brak napisu „Czekaj na światła”', not seenWait)
+ui.dwriteDrawText = old37
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)
