@@ -1,5 +1,13 @@
 # Zmiany
 
+## 0.1.8
+
+### Poprawki
+- Brama nad polem obniżona do 1,5 m.
+- Po przerwaniu startu automat świateł nie liczy już starych meldunków „stoję na polu” – światła nie ruszą w trakcie dodatkowego okrążenia formującego.
+- Auto przeniesione do boksu w trakcie formującego od razu startuje z alei i nie blokuje świateł.
+- Auto, które nie ruszyło na formujące, jest traktowane jako gotowe do startu (komunikat dla kierowcy i stan „nie ruszył” w panelu).
+
 ## 0.1.7
 
 ### Nowe funkcje

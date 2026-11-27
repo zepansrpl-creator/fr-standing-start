@@ -458,5 +458,53 @@ check('S17: falstart na końcu', clip:find('Kierowca2 %(P3%) – FALSTART') ~= n
 adminPanel().ui()
 check('S17: panel z listą bez błędów', true)
 
+---------------------------------------------------------------- scenariusz 18: przerwanie startu nie zostawia starych statusów w automacie
+setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 2, AUTO_TIMEOUT_S = 30 })
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+-- drugie auto (lider) melduje się na polu, ja jeszcze jadę
+env.events[1].cb(env.cars[1], { state = 4, offsetCm = 0, pending = 0 })
+moveCar(env.cars[0], 0.3, 60); frame(50)
+press('Przerwij start (dodatkowe formujące)')
+env.red = 0
+-- przez 40 s po przerwaniu lider nie przysłał nowego statusu (stary „na polu” nie może uruchomić świateł)
+for _ = 1, 800 do frame(50) end
+check('S18: brak świateł od starego statusu po przerwaniu', (env.red or 0) == 0)
+
+---------------------------------------------------------------- scenariusz 19: auto przeniesione do boksu i auto, które nie ruszyło, nie blokują świateł
+setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 2, AUTO_TIMEOUT_S = 600 })
+env.cars[2] = makeCar(2, 0.97, -1.5); env.sim.carsCount = 3
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+-- auto 1: przeniesione do boksu → melduje start z alei; auto 2: nie ruszyło → melduje „nie ruszył”
+env.events[1].cb(env.cars[1], { state = 8, offsetCm = 0, pending = 0 })
+env.events[1].cb(env.cars[2], { state = 13, offsetCm = 0, pending = 0 })
+driveFormation(0.0)
+local seen19 = false
+for _ = 1, 200 do env.red = 0; frame(50); if env.red > 0 then seen19 = true end end
+check('S19: światła ruszyły bez czekania na limit czasu', seen19)
+
+---------------------------------------------------------------- scenariusz 20: własne auto w boksie podczas formującego = start z alei; nie ruszyło = gotowy
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+for _ = 1, 500 do frame(50) end -- stoi na polu 25 s
+local texts = {}
+local old = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) texts[#texts + 1] = t end
+frame(50)
+local dns = false
+for _, t in ipairs(texts) do if t:find('Nie ruszyłeś') then dns = true end end
+check('S20: auto, które nie ruszyło, ma stan „nie ruszył”', dns)
+env.cars[0].isInPit = true; frame(50)
+texts = {}; frame(50)
+local pit = false
+for _, t in ipairs(texts) do if t:find('START Z ALEI') then pit = true end end
+check('S20: auto w boksie = start z alei', pit)
+ui.dwriteDrawText = old
+
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

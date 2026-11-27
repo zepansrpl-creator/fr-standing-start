@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.7'
+local VERSION = '0.1.8'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -57,6 +57,7 @@ L.S = {
   RACING = 10,     -- po zgaszeniu świateł
   LATE = 11,       -- jechał, gdy zapaliły się światła
   WRONG_LANE = 12, -- stoi obok pola (w lewo/prawo)
+  DNS = 13,        -- nie ruszył na okrążenie formujące (stoi na polu)
 }
 
 -- Fazy wyścigu (wspólne dla wszystkich, sterowane startem z gry i komendami admina).
@@ -131,7 +132,7 @@ end
 -- Czy stan oznacza, że auto czeka na start (stoi).
 function L.isReadyState(s)
   return s == L.S.IN_SLOT or s == L.S.SHORT or s == L.S.OVERSHOOT or s == L.S.OVERSHOOT_PEN
-    or s == L.S.PIT_START or s == L.S.NO_SLOT or s == L.S.WRONG_LANE
+    or s == L.S.PIT_START or s == L.S.NO_SLOT or s == L.S.WRONG_LANE or s == L.S.DNS
 end
 
 -- Stan świateł w chwili `now` (ms czasu sesji).
@@ -242,8 +243,10 @@ L.TEXT = {
     stateNames = {
       [0] = '–', 'na polu (przed startem)', 'formujące', 'dojeżdża', 'na polu', 'przed polem',
       'za daleko', 'PRZESTRZELIŁ (kara)', 'aleja serwisowa', 'brak pola', 'wyścig', 'spóźniony', 'obok pola',
+      'nie ruszył na formujące',
     },
     pending = 'kara czeka',
+    dns = 'Nie ruszyłeś na okrążenie formujące – czekaj na światła',
     listTitle = 'Czasy reakcji – %s – %s',
     listJump = 'FALSTART (%d ms za wcześnie)',
     listLate = 'nie stał na polu',
@@ -316,9 +319,10 @@ L.TEXT = {
     on = 'on', off = 'off',
     stateNames = {
       [0] = '–', 'on grid (before start)', 'formation', 'approaching', 'in slot', 'short of slot',
-      'too far', 'OVERSHOT (penalty)', 'pit lane', 'no slot', 'race', 'late', 'beside slot',
+      'too far', 'OVERSHOT (penalty)', 'pit lane', 'no slot', 'race', 'late', 'beside slot', 'did not start formation',
     },
     pending = 'penalty pending',
+    dns = 'You did not start the formation lap – wait for the lights',
     listTitle = 'Reaction times – %s – %s',
     listJump = 'JUMP START (%d ms early)',
     listLate = 'not in slot',
@@ -447,7 +451,7 @@ resetMe()
 local statuses = {}  -- [carIndex] = {state, offsetCm, pending, at}
 
 -- Automat świateł (tylko klient admina)
-local auto = { readySince = nil, firstReadyAt = nil }
+local auto = { readySince = nil, firstReadyAt = nil, since = 0 }
 
 -- Lokalny zegar tego komputera (ms). Światła liczymy od chwili otrzymania komendy,
 -- bo czas sesji potrafi się różnić między komputerami o kilka sekund.
@@ -598,7 +602,9 @@ local function startFormation(extraLap)
   if me.pitStart then me.state = L.S.PIT_START
   elseif slots[0] then me.state = L.S.FORMATION
   else me.state = L.S.NO_SLOT end
-  auto.readySince, auto.firstReadyAt = nil, nil
+  auto.readySince, auto.firstReadyAt, auto.since = nil, nil, gameS()
+  me.formationStartAt = gameS()
+  pushStatus(true) -- wszyscy od razu meldują nowy stan (stare statusy przestają się liczyć)
   if extraLap then
     notify(T('aborted'), 8, rgbm.colors.yellow)
     -- kara za przestrzelenie z przerwanego startu przepada, falstart też
@@ -778,8 +784,8 @@ local function updateFormation(dt)
     me.state = me.pitStart and L.S.PIT_START or L.S.NO_SLOT
     return
   end
-  -- wjazd do alei w trakcie formującego = start z alei
-  if myCar.isInPitlane and me.traveled > 200 then
+  -- auto w alei lub w boksie (wjazd albo przeniesienie do boksu) = start z alei
+  if myCar.isInPitlane or myCar.isInPit then
     me.pitStart = true
     me.state = L.S.PIT_START
     return
@@ -795,6 +801,13 @@ local function updateFormation(dt)
   local long, lat = L.slotOffset(myCar.position, s.pos, s.look, s.side)
   local dist = L.signedSlotDistance(myCar.splinePosition, s.spline, trackLen, long)
   me.dist = dist
+
+  -- nie ruszył na formujące: stoi na swoim polu od ponad 20 s
+  if me.traveled < 30 and myCar.speedKmh < 1 and gameS() - (me.formationStartAt or gameS()) > 20 then
+    me.state = L.S.DNS
+    me.long, me.lat = dist, lat
+    return
+  end
 
   if L.isApproaching(me.traveled, trackLen, dist, cfg) then
     me.long, me.lat = dist, lat
@@ -903,7 +916,12 @@ local function updateAutoLights()
   for i = 0, sim.carsCount - 1 do
     local c = ac.getCar(i)
     if c and c.isConnected then
-      local st = i == 0 and me.state or (statuses[i] and statuses[i].state)
+      local st
+      if i == 0 then st = me.state
+      elseif statuses[i] then
+        -- status sprzed rozpoczęcia tego okrążenia formującego (np. sprzed przerwania startu) jest nieaktualny
+        st = statuses[i].at >= auto.since and statuses[i].state or L.S.FORMATION
+      end
       if st then
         list[#list + 1] = st
         if L.isReadyState(st) and st ~= L.S.PIT_START and st ~= L.S.NO_SLOT then anyReady = true end
@@ -1028,7 +1046,7 @@ function script.draw3D()
   -- linia przodu pola: tu ma być przód auta (biała, gruba)
   band(base + f + l, base + f + r, look, 0.35, rgbm(4, 4, 4, 1))
   -- brama nad przodem pola: dwa wysokie słupki i poprzeczka, widoczne z daleka
-  local up = vec3(0, 3.2, 0)
+  local up = vec3(0, 1.5, 0)
   for _, corner in ipairs({ base + f + l, base + f + r }) do
     band(corner, corner + up, look, 0.18, edge)
     band(corner, corner + up, side, 0.18, edge)
@@ -1044,7 +1062,7 @@ function script.draw3D()
     local to = base + look * L.clamp(me.long or 0, -halfL, halfL)
     band(from, to, look, 0.3, rgbm(4, 3, 0.2, 1))
   end
-  pcall(render.debugText, base + look * halfL + vec3(0, 3.7, 0), 'P' .. tostring(s.gridPos), rgbm(4, 4, 4, 1), 3.5)
+  pcall(render.debugText, base + look * halfL + vec3(0, 2.0, 0), 'P' .. tostring(s.gridPos), rgbm(4, 4, 4, 1), 3.5)
   render.setCullMode(render.CullMode.Back)
   render.setDepthMode(render.DepthMode.Normal)
   render.setBlendMode(render.BlendMode.Opaque)
@@ -1168,6 +1186,8 @@ function script.drawUI()
         banner(T('overshootPen', me.maxLong), 0, 30, rgbm.colors.white, rgbm(0.7, 0, 0, 0.8))
       elseif st == L.S.LATE then
         banner(T('late'), 0, 24, rgbm.colors.yellow)
+      elseif st == L.S.DNS then
+        banner(T('dns'), 0, 24, rgbm.colors.yellow)
       end
       if phase == L.P.LIGHTS and st ~= L.S.LATE then
         banner(T('waitLights'), 60, 18)
