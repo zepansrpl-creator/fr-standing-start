@@ -1,5 +1,17 @@
 # Zmiany
 
+## 0.2.0
+
+### Nowe funkcje
+- Start z boksu: komunikat dla kierowcy, możliwość przejechania formującego z obowiązkiem powrotu do alei przed światłami, własne światło wyjazdu z alei – zielone, gdy cała stawka minie T1 (300 m za polem P1) albo po 30 s.
+- Kara stop & go (postój 10 s w swoim boksie, z odliczaniem) dla kierowcy, który przy zapaleniu świateł był ponad 20 m od pola; bliżej – drive-through.
+- Kierowca dołączający w trakcie procedury startu dostaje informację, że startuje z boksu.
+
+### Poprawki
+- Ramka pola 3 razy cieńsza.
+- Numer pola liczony z ustawienia aut na polach, a nie z wyników – auto przeniesione do boksu nie zabiera lidera pola P1.
+- Wyjazd z boksu na formujące nie daje już pola na końcu stawki (zastąpione startem z boksu).
+
 ## 0.1.9
 
 ### Nowe funkcje

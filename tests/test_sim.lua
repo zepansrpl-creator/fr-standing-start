@@ -398,7 +398,7 @@ driveFormation(0.0)
 -- komenda od innego auta (admin = auto 1), a zegar sesji tego klienta „uciekł” o 5 s
 env.sim.currentSessionTime = env.sim.currentSessionTime + 5000
 env.cars[0].ping = 80
-env.events[3].cb(env.cars[1], { cmd = 1, t0 = 0, hold = 1000, target = -1 })
+env.events[4].cb(env.cars[1], { cmd = 1, t0 = 0, hold = 1000, target = -1 })
 env.red = 0; frame(50)
 check('S15: zaraz po komendzie żadne światło nie świeci', env.red == 0)
 local litAt
@@ -502,45 +502,9 @@ check('S20: auto, które nie ruszyło, ma stan „nie ruszył”', dns)
 env.cars[0].isInPit = true; frame(50)
 texts = {}; frame(50)
 local pit = false
-for _, t in ipairs(texts) do if t:find('START Z ALEI') then pit = true end end
+for _, t in ipairs(texts) do if t:find('START Z BOKSU') then pit = true end end
 check('S20: auto w boksie = start z alei', pit)
 ui.dwriteDrawText = old
-
----------------------------------------------------------------- scenariusz 21: wyjazd z boksu na formujące = pole na końcu stawki
-setup(nil)
-env.cars[0].isInPitlane = true
-moveCar(env.cars[0], 0.90, 0) -- auto stoi w alei
-for _ = 1, 5 do frame(50) end
-env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
-frame(50)
-local texts21 = {}
-local old21 = ui.dwriteDrawText
-ui.dwriteDrawText = function(t) texts21[#texts21 + 1] = t end
--- wyjeżdża z alei w trakcie formującego
-env.cars[0].isInPitlane = false
-moveCar(env.cars[0], 0.92, 60); frame(50)
-local back = false
-for _, t in ipairs(texts21) do if t:find('końca stawki: P2') then back = true end end
-check('S21: komunikat o polu na końcu stawki (P2)', back)
--- jedzie dookoła i staje 8 m za polem auta 1 (pole P2)
-local s1 = 0.975 -- splajn auta 1 (P1)
-local target = s1 - 8 / TRACK + 1
-local sp = 0.92
-while sp < target do
-  sp = math.min(target, sp + 20 / 3.6 * 0.05 / TRACK * 3)
-  moveCar(env.cars[0], sp, (target - sp) * TRACK < 30 and 10 or 60); frame(50)
-end
-env.cars[0].lat = 1.5 -- pole P2 jest po stronie auta 1 (lat 1.5)
-moveCar(env.cars[0], target, 0)
-texts21 = {}
-for _ = 1, 10 do frame(50) end
-local stop = false
-for _, t in ipairs(texts21) do if t:find('STOP') then stop = true end end
-check('S21: stoi na polu na końcu stawki', stop)
-ui.dwriteDrawText = old21
-press('Zapal światła')
-for _ = 1, 300 do frame(50) end
-check('S21: bez kary', #env.penalties == 0)
 
 ---------------------------------------------------------------- scenariusz 22: jedzie w trakcie świateł (nie zdążył na pole) = DT
 setup(nil)
@@ -551,8 +515,108 @@ moveCar(env.cars[0], 0.5, 70); frame(50)
 press('Zapal światła')
 for _ = 1, 300 do moveCar(env.cars[0], env.cars[0].splinePosition + 0.0005, 70); frame(50) end
 local late = false
-for _, m in ipairs(env.chats) do if m:find('nie stał na polu') and m:find('drive%-through') then late = true end end
-check('S22: spóźniony dostaje drive-through', late and #env.penalties == 1 and env.penalties[1][1] == 1)
+for _, m in ipairs(env.chats) do if m:find('nie stał na polu') and m:find('stop & go') then late = true end end
+check('S22: spóźniony daleko od pola dostaje stop & go', late and #env.penalties == 1 and env.penalties[1][1] == 1)
+-- odbycie: postój w boksie 10 s
+env.cars[0].isInPitlane = true; env.cars[0].isInPit = true; env.cars[0].speedKmh = 0
+for _ = 1, 210 do frame(50) end
+env.cars[0].isInPit = false; env.cars[0].speedKmh = 40; frame(50)
+env.cars[0].isInPitlane = false; frame(50)
+local sgOk = false
+for _, m in ipairs(env.chats) do if m:find('stop & go odbyty') then sgOk = true end end
+check('S22: stop & go odbyty po 10 s w boksie', sgOk)
+
+---------------------------------------------------------------- scenariusz 23: spóźniony blisko pola = DT
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+press('Pomiń formujące (test)')
+-- 10 m przed polem, jeszcze jedzie
+moveCar(env.cars[0], 0.980 - 10 / TRACK, 20); frame(50)
+press('Zapal światła')
+for _ = 1, 300 do frame(50) end
+local dt23 = false
+for _, m in ipairs(env.chats) do if m:find('nie stał na polu') and m:find('drive%-through') then dt23 = true end end
+check('S23: spóźniony blisko pola dostaje DT', dt23)
+
+---------------------------------------------------------------- scenariusz 24: start z boksu – formujące, powrót do alei, zielone po T1
+setup(nil)
+env.cars[0].isInPitlane = true; env.cars[0].isInPit = true
+moveCar(env.cars[0], 0.05, 0)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+local tx = {}
+local old24 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) tx[#tx + 1] = t end
+env.cars[0].isInPitlane = false; env.cars[0].isInPit = false
+moveCar(env.cars[0], 0.2, 60); frame(50)
+local pitOut = false
+for _, t in ipairs(tx) do if t:find('po okrążeniu formującym zjedź') then pitOut = true end end
+check('S24: komunikat o powrocie do alei po formującym', pitOut)
+-- wraca do alei przed światłami
+env.cars[0].isInPitlane = true; env.cars[0].speedKmh = 0; frame(50)
+press('Zapal światła')
+for _ = 1, 170 do frame(50) end
+tx = {}; frame(50)
+local wait = false
+for _, t in ipairs(tx) do if t:find('WYJAZD Z ALEI: CZEKAJ') then wait = true end end
+check('S24: po starcie czerwone światło wyjazdu', wait and #env.penalties == 0)
+-- auto 1 (P2) mija T1 (300 m za polem P1)
+moveCar(env.cars[1], (0.980 + 0.31) % 1, 150)
+tx = {}; frame(50); frame(50)
+local go = false
+for _, t in ipairs(tx) do if t:find('WYJAZD Z ALEI: JEDŹ') then go = true end end
+check('S24: zielone po minięciu T1 przez stawkę', go)
+env.cars[0].isInPitlane = false; frame(50)
+check('S24: wyjazd na zielonym bez kary', #env.penalties == 0)
+ui.dwriteDrawText = old24
+
+---------------------------------------------------------------- scenariusz 25: wyjazd z boksu przed zielonym = kara
+setup(nil)
+env.cars[0].isInPitlane = true; env.cars[0].isInPit = true
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+press('Zapal światła')
+for _ = 1, 170 do frame(50) end
+env.cars[0].isInPit = false; env.cars[0].isInPitlane = false; frame(50)
+local early = false
+for _, m in ipairs(env.chats) do if m:find('przed zielonym') then early = true end end
+check('S25: wyjazd przed zielonym = kara', early and #env.penalties == 1)
+
+---------------------------------------------------------------- scenariusz 26: numer pola z położenia, nie z wyników
+setup(nil)
+env.cars[0].racePosition = 2; env.cars[1].racePosition = 3
+env.cars[2] = makeCar(2, 0.30, 0); env.cars[2].isInPitlane = true; env.cars[2].racePosition = 1; env.sim.carsCount = 3
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+local tx26 = {}
+local old26 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) tx26[#tx26 + 1] = t end
+moveCar(env.cars[0], 0.1, 60); frame(50)
+local p1 = false
+for _, t in ipairs(tx26) do if t:find('Twoje pole: P1') then p1 = true end end
+check('S26: lider ma P1 mimo auta w boksie z P1 w wynikach', p1)
+ui.dwriteDrawText = old26
+
+---------------------------------------------------------------- scenariusz 27: dołączenie w trakcie formującego
+setup(nil)
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 30000
+env.cars[0].isInPitlane = true; env.cars[0].isInPit = true
+for _ = 1, 5 do frame(50) end
+-- admin (auto 1) ogłasza fazę: formujące
+env.events[3].cb(env.cars[1], { phase = 2, released = 0 })
+local tx27 = {}
+local old27 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) tx27[#tx27 + 1] = t end
+frame(50)
+local info = false
+for _, t in ipairs(tx27) do if t:find('START Z BOKSU') then info = true end end
+check('S27: dołączający w trakcie formującego widzi start z boksu', info)
+ui.dwriteDrawText = old27
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

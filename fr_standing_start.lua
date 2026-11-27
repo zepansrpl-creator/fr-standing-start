@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.1.9'
+local VERSION = '0.2.0'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -28,6 +28,11 @@ L.DEFAULTS = {
   OVERSHOOT_PENALTY = 'DRIVE_THROUGH', -- DRIVE_THROUGH / TELEPORT / WARNING
   JUMP_START_PENALTY = 'DRIVE_THROUGH',
   LATE_PENALTY = 'DRIVE_THROUGH', -- nie dojechał na pole przed zapaleniem świateł
+  LATE_FAR_M = 20,             -- ...a był dalej niż tyle od pola
+  LATE_FAR_PENALTY = 'STOP_GO',
+  STOP_GO_SECONDS = 10,        -- czas postoju w boksie przy karze stop & go
+  PIT_RELEASE_M = 300,         -- start z boksu: wyjazd dopiero, gdy cała stawka minie punkt tyle metrów za polem P1 (≈ T1)
+  PIT_RELEASE_MAX_S = 30,      -- ...albo po tylu sekundach od zgaszenia świateł
   PENALTY_LAPS = 3,            -- ile okrążeń na odbycie drive-through
   TELEPORT_SECONDS = 10,       -- blokada w boksie przy karze TELEPORT
   JUMP_START_M = 0.5,          -- ruch większy niż tyle przed zgaszeniem świateł = falstart
@@ -59,13 +64,14 @@ L.S = {
   LATE = 11,       -- jechał, gdy zapaliły się światła
   WRONG_LANE = 12, -- stoi obok pola (w lewo/prawo)
   DNS = 13,        -- nie ruszył na okrążenie formujące (stoi na polu)
+  PIT_OUT = 14,    -- startuje z boksu, jedzie okrążenie formujące (musi wrócić do alei)
 }
 
 -- Fazy wyścigu (wspólne dla wszystkich, sterowane startem z gry i komendami admina).
 L.P = { IDLE = 0, GRID = 1, FORMATION = 2, LIGHTS = 3, RACING = 4 }
 
 -- Komendy admina.
-L.CMD = { LIGHTS = 1, ABORT = 2, PARDON = 3, SKIP_FORMATION = 4 }
+L.CMD = { LIGHTS = 1, ABORT = 2, PARDON = 3, SKIP_FORMATION = 4, PIT_RELEASE = 5 }
 
 function L.clamp(x, a, b) if x < a then return a elseif x > b then return b else return x end end
 
@@ -105,32 +111,6 @@ function L.isApproaching(traveled, trackLen, signedDist, cfg, minTravel)
   return traveled > (minTravel or trackLen * 0.5) and signedDist > -cfg.APPROACH_ZONE_M and signedDist < 60
 end
 
--- Pola na końcu stawki (dla aut ruszających z boksu).
--- grid: pola aut na starcie, w kolejności P1..Pn ({pos, look, side, spline});
--- zwraca pole o numerze n + k. Wzór: pole dwa miejsca wcześniej (ta sama strona) + odstęp rzędu.
-function L.backSlot(grid, k, trackLen)
-  local list = {}
-  for i, g in ipairs(grid) do list[i] = g end
-  local n = #list
-  if n == 0 then return nil end
-  local function sub(a, b) return { x = a.x - b.x, y = a.y - b.y, z = a.z - b.z } end
-  local function add(a, b) return { x = a.x + b.x, y = a.y + b.y, z = a.z + b.z } end
-  for t = n + 1, n + k do
-    local ref = list[t - 2] or list[t - 1]
-    local step
-    if list[t - 4] then step = sub(ref.pos, list[t - 4].pos)
-    else step = { x = -ref.look.x * 8, y = -ref.look.y * 8, z = -ref.look.z * 8 } end
-    if not list[t - 2] then
-      -- tylko jedno auto na polach: drugie pole obok, przesunięte o pół rzędu
-      step = { x = -ref.look.x * 8, y = -ref.look.y * 8, z = -ref.look.z * 8 }
-    end
-    local pos = add(ref.pos, step)
-    local back = -(step.x * ref.look.x + step.y * ref.look.y + step.z * ref.look.z)
-    list[t] = { pos = pos, look = ref.look, side = ref.side, size = ref.size,
-      spline = (ref.spline - back / (trackLen or 4000)) % 1, gridPos = t }
-  end
-  return list[n + k]
-end
 
 -- Ocena stojącego (lub dojeżdżającego) auta względem pola.
 -- long – bieżące przesunięcie, maxLong – najdalsze przesunięcie osiągnięte w strefie pola.
@@ -145,6 +125,28 @@ function L.classifySlot(long, maxLong, speedKmh, cfg, lat)
   if long > cfg.GRID_TOLERANCE_M then return L.S.OVERSHOOT, long end
   if long < -cfg.GRID_TOLERANCE_M then return L.S.SHORT, long end
   return L.S.IN_SLOT, long
+end
+
+-- Kara dla auta, które nie stało na polu przy zapaleniu świateł (dist – odległość od pola w m).
+function L.latePenalty(dist, cfg)
+  if dist and math.abs(dist) > cfg.LATE_FAR_M then return L.parsePenalty(cfg.LATE_FAR_PENALTY, cfg) end
+  return L.parsePenalty(cfg.LATE_PENALTY, cfg)
+end
+
+-- Kolejność pól: auta posortowane po położeniu na torze (najbliżej linii startu = P1).
+-- splines: lista pozycji na splajnie; zwraca listę indeksów od P1.
+function L.gridOrder(splines)
+  local idx = {}
+  for i in ipairs(splines) do idx[#idx + 1] = i end
+  if #idx == 0 then return idx end
+  local ref = splines[1]
+  table.sort(idx, function(a, b) return L.splineDelta(splines[a], ref) > L.splineDelta(splines[b], ref) end)
+  return idx
+end
+
+-- Czy auto minęło punkt toru (np. T1) – dodatnia różnica na splajnie (do pół okrążenia).
+function L.passedPoint(carSpline, pointSpline)
+  return L.splineDelta(carSpline, pointSpline) >= 0
 end
 
 -- Czy stanie obok pola zasługuje na karę (sprawdzane przy zapaleniu świateł).
@@ -183,11 +185,12 @@ function L.parsePenalty(name, cfg)
   name = string.upper(tostring(name or ''))
   if name == 'DRIVE_THROUGH' or name == 'DT' then return { kind = 'dt', param = cfg.PENALTY_LAPS } end
   if name == 'TELEPORT' or name == 'TELEPORT_TO_PITS' then return { kind = 'teleport', param = cfg.TELEPORT_SECONDS } end
+  if name == 'STOP_GO' or name == 'SG' or name == 'STOP_AND_GO' then return { kind = 'sg', param = cfg.STOP_GO_SECONDS } end
   return { kind = 'warning', param = 0 }
 end
 
 -- Która z dwóch kar jest surowsza (gdy kierowca dostał obie, wykonujemy jedną).
-local severity = { warning = 0, dt = 1, teleport = 2 }
+local severity = { warning = 0, dt = 1, sg = 2, teleport = 3 }
 function L.stronger(a, b)
   if not a then return b end
   if not b then return a end
@@ -232,7 +235,7 @@ L.TEXT = {
     formation = 'OKRĄŻENIE FORMUJĄCE',
     formationLimit = 'OKRĄŻENIE FORMUJĄCE · max %d km/h',
     yourSlot = 'Twoje pole: P%d',
-    pitStart = 'START Z ALEI SERWISOWEJ – wyjedź dopiero po zgaszeniu świateł',
+    pitStart = 'START Z BOKSU – wyjedź dopiero na zielone światło wyjazdu z alei',
     noSlot = 'Brak pola startowego (dołączyłeś po starcie) – startuj z alei',
     toGo = 'P%d · ↑ %d m',
     toGoNear = 'P%d · ↑ %.1f m',
@@ -254,7 +257,7 @@ L.TEXT = {
     chatOver = '%s P%d %s: przestrzelone pole o %.1f m → %s',
     chatReaction = '%s P%d %s: reakcja %d ms',
     chatLate = '%s P%d %s: nie stał na polu przy zapaleniu świateł → %s',
-    chatPit = '%s %s: wyjazd z alei przed zgaszeniem świateł → %s',
+    chatPit = '%s %s: wyjazd z alei przed zielonym światłem → %s',
     penNameDT = 'drive-through', penNameTP = 'teleport do boksów', penNameWarn = 'ostrzeżenie',
     -- panel admina
     adminTitle = 'FR Standing Start – admin',
@@ -270,12 +273,24 @@ L.TEXT = {
     on = 'włączony', off = 'wyłączony',
     stateNames = {
       [0] = '–', 'na polu (przed startem)', 'formujące', 'dojeżdża', 'na polu', 'przed polem',
-      'za daleko', 'PRZESTRZELIŁ (kara)', 'aleja serwisowa', 'brak pola', 'wyścig', 'spóźniony', 'obok pola',
-      'nie ruszył na formujące',
+      'za daleko', 'PRZESTRZELIŁ (kara)', 'start z boksu', 'brak pola', 'wyścig', 'spóźniony', 'obok pola',
+      'nie ruszył na formujące', 'z boksu na formującym',
     },
     pending = 'kara czeka',
     dns = 'Nie ruszyłeś na okrążenie formujące – czekaj na światła',
-    backOfGrid = 'Ruszyłeś z boksu – startujesz z końca stawki: P%d',
+    pitStartMsg = 'Startujesz z boksu',
+    pitOut = 'START Z BOKSU – po okrążeniu formującym zjedź do alei serwisowej',
+    pitWait = 'WYJAZD Z ALEI: CZEKAJ',
+    pitGo = 'WYJAZD Z ALEI: JEDŹ',
+    pitEarly = 'Wyjazd z alei przed zielonym światłem',
+    penSG = 'Kara: stop & go %d s (%d okr.)',
+    penNameSG = 'stop & go %d s',
+    sgInfo = 'STOP & GO %d s: zjedź do boksu – zostało okrążeń: %d',
+    sgLast = 'STOP & GO: OSTATNIE OKRĄŻENIE na odbycie kary!',
+    sgCount = 'STOP & GO: %d s',
+    sgGo = 'STOP & GO odbyty – JEDŹ',
+    sgNotServed = 'Stop & go nie zaliczony – zatrzymaj się w swoim boksie na %d s',
+    chatSGServed = '%s %s: stop & go odbyty',
     listTitle = 'Czasy reakcji – %s – %s',
     listJump = 'FALSTART (%d ms za wcześnie)',
     listLate = 'nie stał na polu',
@@ -311,7 +326,7 @@ L.TEXT = {
     formation = 'FORMATION LAP',
     formationLimit = 'FORMATION LAP · max %d km/h',
     yourSlot = 'Your grid slot: P%d',
-    pitStart = 'PIT LANE START – leave only after the lights go out',
+    pitStart = 'PIT START – leave only on the green pit exit light',
     noSlot = 'No grid slot (joined after the start) – start from the pit lane',
     toGo = 'P%d · ↑ %d m',
     toGoNear = 'P%d · ↑ %.1f m',
@@ -333,7 +348,7 @@ L.TEXT = {
     chatOver = '%s P%d %s: grid slot overshot by %.1f m → %s',
     chatReaction = '%s P%d %s: reaction %d ms',
     chatLate = '%s P%d %s: not in slot when the lights came on → %s',
-    chatPit = '%s %s: left the pit lane before lights out → %s',
+    chatPit = '%s %s: left the pit lane before the green light → %s',
     penNameDT = 'drive-through', penNameTP = 'teleport to pits', penNameWarn = 'warning',
     adminTitle = 'FR Standing Start – admin',
     langToggle = 'FR Standing Start: language PL/EN',
@@ -348,11 +363,24 @@ L.TEXT = {
     on = 'on', off = 'off',
     stateNames = {
       [0] = '–', 'on grid (before start)', 'formation', 'approaching', 'in slot', 'short of slot',
-      'too far', 'OVERSHOT (penalty)', 'pit lane', 'no slot', 'race', 'late', 'beside slot', 'did not start formation',
+      'too far', 'OVERSHOT (penalty)', 'pit start', 'no slot', 'race', 'late', 'beside slot', 'did not start formation',
+      'pit starter on formation',
     },
     pending = 'penalty pending',
     dns = 'You did not start the formation lap – wait for the lights',
-    backOfGrid = 'You left the pits – you start from the back of the grid: P%d',
+    pitStartMsg = 'You start from the pits',
+    pitOut = 'PIT START – after the formation lap, enter the pit lane',
+    pitWait = 'PIT EXIT: WAIT',
+    pitGo = 'PIT EXIT: GO',
+    pitEarly = 'Left the pit lane before the green light',
+    penSG = 'Penalty: stop & go %d s (%d laps)',
+    penNameSG = 'stop & go %d s',
+    sgInfo = 'STOP & GO %d s: enter your pit box – laps left: %d',
+    sgLast = 'STOP & GO: LAST LAP to serve the penalty!',
+    sgCount = 'STOP & GO: %d s',
+    sgGo = 'STOP & GO served – GO',
+    sgNotServed = 'Stop & go not served – stop in your pit box for %d s',
+    chatSGServed = '%s %s: stop & go served',
     listTitle = 'Reaction times – %s – %s',
     listJump = 'JUMP START (%d ms early)',
     listLate = 'not in slot',
@@ -417,6 +445,7 @@ end
 
 function L.penaltyName(lang, pen)
   if pen.kind == 'dt' then return L.text(lang, 'penNameDT') end
+  if pen.kind == 'sg' then return string.format(L.text(lang, 'penNameSG'), pen.param) end
   if pen.kind == 'teleport' then return L.text(lang, 'penNameTP') end
   return L.text(lang, 'penNameWarn')
 end
@@ -504,6 +533,11 @@ local function mySlotNumber()
   return s and s.gridPos or 0
 end
 
+-- CSP ustawia sim.isAdmin tylko po zalogowaniu w nowej aplikacji czatu.
+-- Dlatego rozpoznajemy też odpowiedź serwera na komendę /admin.
+local adminByChat = false
+local function isAdmin() return sim.isAdmin or adminByChat end
+
 -- Zdarzenia sieciowe ----------------------------------------------------------
 
 local sendStatus = ac.OnlineEvent({
@@ -540,6 +574,21 @@ end, ac.SharedNamespace.ServerScript)
 local function reportReaction(ms, jump, pit, late)
   local flags = (jump and 1 or 0) + (pit and 2 or 0) + (late and 4 or 0)
   sendReaction({ ms = math.floor(ms or 0), slot = mySlotNumber(), flags = flags })
+end
+
+local onPhase -- zdefiniowane niżej
+local sendPhase = ac.OnlineEvent({
+  key = ac.StructItem.key('frss_phase_v1'),
+  phase = ac.StructItem.byte(),
+  released = ac.StructItem.byte(),
+}, function(sender, data)
+  if onPhase then onPhase(sender, data) end
+end, ac.SharedNamespace.ServerScript)
+
+local pitReleased = false
+local function broadcastPhase()
+  -- klient admina ogłasza fazę (powtarzaną dla kierowców, którzy dołączą później)
+  if isAdmin() then pcall(sendPhase, { phase = phase, released = pitReleased and 1 or 0 }, true) end
 end
 
 local onCommand -- zdefiniowane niżej
@@ -593,39 +642,18 @@ local function recordSlots()
   end
 end
 
-local backSlotsUsed = 0
-
-local function gridList()
-  local list = {}
-  for _, sl in pairs(slots) do if not sl.pit and not sl.back then list[#list + 1] = sl end end
-  table.sort(list, function(a, b) return a.gridPos < b.gridPos end)
-  return list
-end
-
-local function makeBackSlot(k)
-  local trackLen = sim.trackLengthM > 0 and sim.trackLengthM or 4000
-  local b = L.backSlot(gridList(), k, trackLen)
-  if not b then return nil end
-  local p = vec3(b.pos.x, b.pos.y, b.pos.z)
-  local slot = { pos = p, look = b.look, side = b.side, spline = b.spline, gridPos = b.gridPos,
-    size = b.size or vec3(2, 1.3, 4.6), back = true }
-  slot.groundY = groundY(p)
-  return slot
-end
-
 local function freezeSlots()
-  -- numeracja: auta na polach P1..Pn (kolejność z kwalifikacji), auta w boksie dostają pola na końcu
-  local list = gridList()
-  for i, sl in ipairs(list) do sl.gridPos = i end
-  local pits = {}
-  for idx, sl in pairs(slots) do if sl.pit then pits[#pits + 1] = { idx = idx, sid = sl.sessionID or idx } end end
-  table.sort(pits, function(a, b) return a.sid < b.sid end)
-  for k, e in ipairs(pits) do
-    local b = makeBackSlot(k)
-    if b then b.pit = true; slots[e.idx] = b end
+  -- numeracja pól z położenia aut na torze (najbliżej linii = P1), nie z wyników:
+  -- auto przeniesione do boksu nie zabiera pola P1
+  local list = {}
+  for _, sl in pairs(slots) do if not sl.pit then list[#list + 1] = sl end end
+  local splines = {}
+  for i, sl in ipairs(list) do splines[i] = sl.spline end
+  for rank, i in ipairs(L.gridOrder(splines)) do list[i].gridPos = rank end
+  for _, sl in pairs(slots) do
+    if sl.pit then sl.gridPos = 0 end
+    sl.groundY = groundY(sl.pos)
   end
-  backSlotsUsed = #pits
-  for _, s in pairs(slots) do if not s.groundY then s.groundY = groundY(s.pos) end end
   local s = slots[0]
   if s then
     log(string.format('pole P%d zapisane, spline %.4f', s.gridPos, s.spline))
@@ -640,6 +668,10 @@ local function applyPenalty(pen)
     physics.setCarPenalty(ac.PenaltyType.MandatoryPits, pen.param)
     notify(T('penDT', pen.param), 8, rgbm.colors.red)
     me.dt = { laps = pen.param, startLap = myCar.lapCount, inPit = myCar.isInPitlane, done = false }
+  elseif pen.kind == 'sg' then
+    physics.setCarPenalty(ac.PenaltyType.MandatoryPits, cfg.PENALTY_LAPS)
+    notify(T('penSG', pen.param, cfg.PENALTY_LAPS), 8, rgbm.colors.red)
+    me.sg = { laps = cfg.PENALTY_LAPS, startLap = myCar.lapCount, secs = pen.param, stopTime = 0, done = false }
   elseif pen.kind == 'teleport' then
     physics.setCarPenalty(ac.PenaltyType.TeleportToPits, pen.param)
     notify(T('penTP', pen.param), 8, rgbm.colors.red)
@@ -661,7 +693,8 @@ local function startFormation(extraLap)
   me.late = false
   me.jumpMs = nil
   me.lightsStartPos = nil
-  if me.pitStart then me.state = L.S.PIT_START
+  pitReleased = false
+  if me.pitStart then me.state = (myCar.isInPitlane or myCar.isInPit) and L.S.PIT_START or L.S.PIT_OUT
   elseif slots[0] then me.state = L.S.FORMATION
   else me.state = L.S.NO_SLOT end
   auto.readySince, auto.firstReadyAt, auto.since = nil, nil, gameS()
@@ -673,6 +706,7 @@ local function startFormation(extraLap)
     me.pending = nil
     me.pardoned = false
   end
+  broadcastPhase()
   log('faza: formujące' .. (extraLap and ' (dodatkowe)' or ''))
 end
 
@@ -683,6 +717,7 @@ local function startLights(t0, hold)
   lightsT0, lightsHold = t0, hold
   local _, _, outAt = L.lightsState(clockMs(), t0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, hold)
   lightsOutAt = outAt
+  broadcastPhase()
   log(string.format('światła: start %.0f, zgaszenie %.0f', t0, outAt))
 end
 
@@ -714,16 +749,17 @@ local function finishStart()
     end
   end
   if me.late then
-    chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name,
-      penaltyText(L.parsePenalty(cfg.LATE_PENALTY, cfg))))
+    chat(string.format(T('chatLate'), cfg.CHAT_PREFIX, n, name, penaltyText(me.latePen or L.parsePenalty(cfg.LATE_PENALTY, cfg))))
   end
   if me.jumpMs then reportReaction(me.jumpMs, true, me.pitStart, false)
   elseif me.late then reportReaction(0, false, false, true)
   elseif me.pitStart or not slots[0] then reportReaction(0, false, true, false) end
   applyPenalty(pen)
   me.pending = nil
-  me.state = L.S.RACING
+  me.pitWait = me.pitStart and not me.late and not me.jumpMs
+  me.state = me.pitWait and L.S.PIT_START or L.S.RACING
   pushStatus(true)
+  broadcastPhase()
   log('faza: wyścig')
 end
 
@@ -751,8 +787,31 @@ onCommand = function(sender, data)
       notify(T('pardoned'), 6, rgbm.colors.green)
       pushStatus(true)
     end
+  elseif data.cmd == L.CMD.PIT_RELEASE then
+    pitReleased = true
   elseif data.cmd == L.CMD.SKIP_FORMATION then
     if phase == L.P.FORMATION then me.traveled = sim.trackLengthM end
+  end
+end
+
+-- Kierowca dołączył w trakcie procedury startu: dowiaduje się o fazie od admina.
+onPhase = function(sender, data)
+  if sender and sender.index == 0 then return end
+  if data.released == 1 then pitReleased = true end
+  if sim.raceSessionType ~= ac.SessionType.Race or slots[0] then return end
+  -- tylko kierowca bez pola (dołączył po starcie z gry), gdy procedura startu jeszcze trwa
+  if me.state == L.S.NO_SLOT and not (data.phase == L.P.RACING and data.released == 1) then
+    me.pitStart = true
+    if data.phase == L.P.FORMATION then
+      phase = L.P.FORMATION
+      me.state = (myCar.isInPitlane or myCar.isInPit) and L.S.PIT_START or L.S.PIT_OUT
+    else
+      phase = L.P.RACING
+      me.pitWait = not pitReleased
+      me.state = L.S.PIT_START
+    end
+    notify(T('pitStartMsg'), 8, rgbm.colors.yellow)
+    log('dołączenie w trakcie startu: start z boksu')
   end
 end
 
@@ -785,8 +844,6 @@ end)
 
 -- CSP ustawia sim.isAdmin tylko po zalogowaniu w nowej aplikacji czatu.
 -- Dlatego rozpoznajemy też odpowiedź serwera na komendę /admin.
-local adminByChat = false
-local function isAdmin() return sim.isAdmin or adminByChat end
 
 local copyReactions -- zdefiniowane niżej (panel admina)
 
@@ -829,7 +886,7 @@ local function updateGrid()
   -- przed startem z gry: auta stoją na polach z kwalifikacji
   phase = L.P.GRID
   recordSlots()
-  me.pitStart = myCar.isInPitlane
+  me.pitStart = myCar.isInPitlane or myCar.isInPit
   me.state = me.pitStart and L.S.PIT_START or L.S.GRID
 end
 
@@ -843,31 +900,25 @@ local function updateFormation(dt)
     end
   end
 
-  -- ruszył z boksu na okrążenie formujące → pole na końcu stawki
-  if me.pitStart and not myCar.isInPitlane and not myCar.isInPit then
-    local sl = slots[0]
-    if not (sl and sl.back) then
-      backSlotsUsed = backSlotsUsed + 1
-      sl = makeBackSlot(backSlotsUsed)
-      slots[0] = sl
+  -- start z boksu: może przejechać formujące, ale musi wrócić do alei
+  if me.pitStart then
+    if myCar.isInPitlane or myCar.isInPit then
+      me.state = L.S.PIT_START
+    else
+      if me.state == L.S.PIT_START then notify(T('pitOut'), 8, rgbm.colors.yellow) end
+      me.state = L.S.PIT_OUT
     end
-    if sl then
-      me.pitStart = false
-      me.backOfGrid = true
-      me.traveled = 0
-      me.prevSpline = myCar.splinePosition
-      me.maxLong = -1e9
-      notify(T('backOfGrid', sl.gridPos), 8, rgbm.colors.yellow)
-    end
-  end
-  if me.pitStart or not slots[0] then
-    me.state = me.pitStart and L.S.PIT_START or L.S.NO_SLOT
     return
   end
-  -- auto w alei lub w boksie (wjazd albo przeniesienie do boksu) = start z alei
+  if not slots[0] then
+    me.state = L.S.NO_SLOT
+    return
+  end
+  -- auto w alei lub w boksie (wjazd albo przeniesienie do boksu) = start z boksu
   if myCar.isInPitlane or myCar.isInPit then
     me.pitStart = true
     me.state = L.S.PIT_START
+    notify(T('pitStartMsg'), 8, rgbm.colors.yellow)
     return
   end
 
@@ -883,13 +934,13 @@ local function updateFormation(dt)
   me.dist = dist
 
   -- nie ruszył na formujące: stoi na swoim polu od ponad 20 s
-  if not me.backOfGrid and me.traveled < 30 and myCar.speedKmh < 1 and gameS() - (me.formationStartAt or gameS()) > 20 then
+  if me.traveled < 30 and myCar.speedKmh < 1 and gameS() - (me.formationStartAt or gameS()) > 20 then
     me.state = L.S.DNS
     me.long, me.lat = dist, lat
     return
   end
 
-  if L.isApproaching(me.traveled, trackLen, dist, cfg, me.backOfGrid and 150 or nil) then
+  if L.isApproaching(me.traveled, trackLen, dist, cfg) then
     me.long, me.lat = dist, lat
     -- w którą stronę do środka pola: oś „w prawo” z pozycji kół (przednie prawe − przednie lewe)
     local wh = myCar.wheels
@@ -922,21 +973,24 @@ local function updateLights()
       me.pending = L.stronger(me.pending, L.parsePenalty(cfg.OVERSHOOT_PENALTY, cfg))
     end
     local notThere = me.state == L.S.FORMATION or me.state == L.S.APPROACH or me.state == L.S.LATE
-    if not me.pitStart and slots[0] and (notThere or not me.wasStopped) then
+      or me.state == L.S.PIT_OUT
+    if (not me.pitStart and slots[0] and (notThere or not me.wasStopped)) or me.state == L.S.PIT_OUT then
       me.late = true
       me.state = L.S.LATE
       me.wasStopped = false -- spóźniony: ruch w trakcie świateł nie jest liczony jako falstart
+      -- daleko od pola (ponad LATE_FAR_M) = stop & go, bliżej = drive-through
+      me.latePen = me.pitStart and L.parsePenalty(cfg.LATE_PENALTY, cfg) or L.latePenalty(me.dist, cfg)
       if not me.pardoned then
-        me.pending = L.stronger(me.pending, L.parsePenalty(cfg.LATE_PENALTY, cfg))
+        me.pending = L.stronger(me.pending, me.latePen)
       end
       notify(T('late'), 6, rgbm.colors.red)
     end
   end
   -- falstart
-  if me.lightsStartPos and not me.jumpMs and (me.wasStopped or me.pitStart) then
+  if me.lightsStartPos and not me.jumpMs and not me.late and (me.wasStopped or me.pitStart) then
     local moved
     if me.pitStart then
-      moved = (not myCar.isInPitlane) and 99 or 0
+      moved = (not myCar.isInPitlane and not myCar.isInPit) and 99 or 0
     else
       moved = L.slotOffset(myCar.position, me.lightsStartPos, myCar.look, myCar.side)
     end
@@ -979,8 +1033,91 @@ local function updateDriveThrough(frameDt)
   end
 end
 
+local function updateStopGo(frameDt)
+  local sg = me.sg
+  if not sg or sg.done then return end
+  if myCar.isInPitlane or myCar.isInPit then
+    sg.inPit = true
+    if myCar.isInPit and myCar.speedKmh < 1 then
+      sg.stopTime = sg.stopTime + (frameDt or 0)
+      if sg.stopTime < sg.secs then
+        physics.forceUserBrakesFor(0.2, 1) -- trzyma auto w miejscu do końca kary
+      elseif not sg.go then
+        sg.go = true
+        notify(T('sgGo'), 6, rgbm.colors.green)
+        chat(string.format(T('chatSGServed'), cfg.CHAT_PREFIX, myName()))
+      end
+    end
+  elseif sg.inPit then
+    sg.inPit = false
+    if sg.go then
+      sg.done = true
+      return
+    end
+    -- wyjechał bez pełnego postoju
+    sg.stopTime = 0
+    local left = math.max(1, L.dtLapsLeft(sg.laps, sg.startLap, myCar.lapCount))
+    physics.setCarPenalty(ac.PenaltyType.MandatoryPits, left)
+    notify(T('sgNotServed', sg.secs), 8, rgbm.colors.red)
+    chat(string.format(T('chatStopInvalid'), cfg.CHAT_PREFIX, myName()))
+  end
+  if L.dtLapsLeft(sg.laps, sg.startLap, myCar.lapCount) <= 0 and not sg.inPit then
+    sg.done = true
+    sg.missed = true
+    notify(T('penMissed'), 8, rgbm.colors.red)
+    chat(string.format(T('chatMissed'), cfg.CHAT_PREFIX, myName()))
+  end
+end
+
+-- Zielone światło wyjazdu z alei dla startujących z boksu:
+-- cała stawka minęła punkt PIT_RELEASE_M za polem P1 (≈ T1) albo minął limit czasu.
+local function pitReleaseDue()
+  if pitReleased then return true end
+  if not lightsDoneAt then return false end
+  if gameS() - lightsDoneAt >= cfg.PIT_RELEASE_MAX_S then return true end
+  local p1
+  for _, sl in pairs(slots) do if sl.gridPos == 1 then p1 = sl end end
+  if not p1 then return false end
+  local trackLen = sim.trackLengthM > 0 and sim.trackLengthM or 4000
+  local t1 = (p1.spline + cfg.PIT_RELEASE_M / trackLen) % 1
+  for i, sl in pairs(slots) do
+    local c = ac.getCar(i)
+    if c and c.isConnected and not sl.pit and not c.isInPitlane and not c.isInPit then
+      if not L.passedPoint(c.splinePosition, t1) then return false end
+    end
+  end
+  return true
+end
+
+local function updatePitRelease()
+  if not pitReleased and pitReleaseDue() then
+    pitReleased = true
+    if isAdmin() then adminSend(L.CMD.PIT_RELEASE) end
+    broadcastPhase()
+  end
+  if not me.pitWait then return end
+  if pitReleased then
+    me.pitWait = false
+    me.state = L.S.RACING
+    me.pitGoAt = gameS()
+    notify(T('pitGo'), 5, rgbm.colors.green)
+    return
+  end
+  -- wyjazd z alei przed zielonym światłem
+  if not myCar.isInPitlane and not myCar.isInPit then
+    me.pitWait = false
+    me.state = L.S.RACING
+    local p = L.parsePenalty(cfg.JUMP_START_PENALTY, cfg)
+    chat(string.format(T('chatPit'), cfg.CHAT_PREFIX, myName(), penaltyText(p)))
+    notify(T('pitEarly'), 8, rgbm.colors.red)
+    applyPenalty(p)
+  end
+end
+
 local function updateRacing(frameDt)
+  updatePitRelease()
   updateDriveThrough(frameDt)
+  updateStopGo(frameDt)
   -- czas reakcji w pierwszych 5 s po zgaszeniu świateł
   if me.reactionMs or me.jumpMs or me.late or not me.outPos or not lightsDoneAt then return end
   if gameS() - lightsDoneAt > 5 then return end
@@ -1124,28 +1261,28 @@ function script.draw3D()
   -- wypełnienie pola
   render.quad(base + b + l, base + b + r, base + f + r, base + f + l, col)
   -- gruba obwódka (25 cm)
-  local t = 0.25
+  local t = 0.08
   band(base + b + l, base + f + l, side, t, edge)
   band(base + b + r, base + f + r, side, t, edge)
   band(base + b + l, base + b + r, look, t, edge)
   -- linia przodu pola: tu ma być przód auta (biała, gruba)
-  band(base + f + l, base + f + r, look, 0.35, rgbm(4, 4, 4, 1))
+  band(base + f + l, base + f + r, look, 0.12, rgbm(4, 4, 4, 1))
   -- brama nad przodem pola: dwa wysokie słupki i poprzeczka, widoczne z daleka
   local up = vec3(0, 1.5, 0)
   for _, corner in ipairs({ base + f + l, base + f + r }) do
-    band(corner, corner + up, look, 0.18, edge)
-    band(corner, corner + up, side, 0.18, edge)
+    band(corner, corner + up, look, 0.06, edge)
+    band(corner, corner + up, side, 0.06, edge)
   end
-  band(base + f + l + up, base + f + r + up, look, 0.25, edge)
-  band(base + f + l + up, base + f + r + up, vec3(0, 1, 0), 0.25, edge)
+  band(base + f + l + up, base + f + r + up, look, 0.08, edge)
+  band(base + f + l + up, base + f + r + up, vec3(0, 1, 0), 0.08, edge)
   -- granica kary za przestrzelenie (czerwona)
   local w = look * (halfL + cfg.GRID_WARNING_M)
-  band(base + w + l, base + w + r, look, 0.3, rgbm(4, 0.2, 0.1, 1))
+  band(base + w + l, base + w + r, look, 0.1, rgbm(4, 0.2, 0.1, 1))
   -- strzałka do środka pola, gdy auto stoi obok
   if me.state == L.S.WRONG_LANE then
     local from = vec3(myCar.position.x, y, myCar.position.z)
     local to = base + look * L.clamp(me.long or 0, -halfL, halfL)
-    band(from, to, look, 0.3, rgbm(4, 3, 0.2, 1))
+    band(from, to, look, 0.1, rgbm(4, 3, 0.2, 1))
   end
   pcall(render.debugText, base + look * halfL + vec3(0, 2.0, 0), 'P' .. tostring(s.gridPos), rgbm(4, 4, 4, 1), 3.5)
   render.setCullMode(render.CullMode.Back)
@@ -1219,7 +1356,29 @@ local function drawPreview()
   end
 end
 
+-- światło wyjazdu z alei dla startujących z boksu
+local function drawPitLight()
+  local green = not me.pitWait and me.pitGoAt and gameS() - me.pitGoAt < 8
+  if not me.pitWait and not green then return end
+  local w = screen()
+  local r, y = 30, 90
+  ui.drawRectFilled(vec2(w / 2 - r - 14, y - r - 14), vec2(w / 2 + r + 14, y + r + 14), rgbm(0, 0, 0, 0.75), 10)
+  ui.drawCircleFilled(vec2(w / 2, y), r, green and rgbm(0.1, 1, 0.2, 1) or rgbm(1, 0.05, 0.03, 1), 32)
+  banner(T(green and 'pitGo' or 'pitWait'), 0, 26, green and rgbm(0.2, 1, 0.3, 1) or rgbm.colors.white)
+end
+
 local function drawDriveThroughInfo()
+  local sg = me.sg
+  if sg and not sg.done and not sg.go then
+    if myCar.isInPit and myCar.speedKmh < 1 then
+      banner(T('sgCount', math.max(0, math.ceil(sg.secs - sg.stopTime))), 0, 40, rgbm.colors.white, rgbm(0.75, 0, 0, 0.85))
+    else
+      local leftSg = L.dtLapsLeft(sg.laps, sg.startLap, myCar.lapCount)
+      if leftSg <= 1 then banner(T('sgLast'), 0, 22, rgbm.colors.white, rgbm(0.75, 0, 0, 0.85))
+      else banner(T('sgInfo', sg.secs, leftSg), 0, 20, rgbm.colors.white, rgbm(0.6, 0, 0, 0.7)) end
+    end
+    return
+  end
   local dt = me.dt
   if not dt or dt.done then return end
   local left = L.dtLapsLeft(dt.laps, dt.startLap, myCar.lapCount)
@@ -1244,6 +1403,8 @@ function script.drawUI()
       local st = me.state
       if st == L.S.PIT_START then
         banner(T('pitStart'), 0, 20, rgbm.colors.yellow)
+      elseif st == L.S.PIT_OUT then
+        banner(T('pitOut'), 0, 22, rgbm.colors.yellow)
       elseif st == L.S.NO_SLOT then
         banner(T('noSlot'), 0, 20, rgbm.colors.yellow)
       elseif st == L.S.FORMATION then
@@ -1278,6 +1439,7 @@ function script.drawUI()
         banner(T('waitLights'), 60, 18)
       end
     elseif phase == L.P.RACING then
+      drawPitLight()
       drawDriveThroughInfo()
     end
 

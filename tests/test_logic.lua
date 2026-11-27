@@ -126,23 +126,16 @@ check('lista: kolejność wg czasu', txt:find('1%. A %(P1%) – 0%.210 s') and t
 check('lista: falstart', txt:find('C %(P3%) – FALSTART %(90 ms') ~= nil)
 check('lista: start z alei', txt:find('D %(P4%) – start z alei') ~= nil)
 
--- pola na końcu stawki
-local look1, side1 = { x = 0, y = 0, z = 1 }, { x = 1, y = 0, z = 0 }
-local grid = {
-  { pos = { x = -1.5, y = 0, z = 0 }, look = look1, side = side1, spline = 0.99 },
-  { pos = { x = 1.5, y = 0, z = -4 }, look = look1, side = side1, spline = 0.989 },
-  { pos = { x = -1.5, y = 0, z = -8 }, look = look1, side = side1, spline = 0.988 },
-  { pos = { x = 1.5, y = 0, z = -12 }, look = look1, side = side1, spline = 0.987 },
-}
-local b1 = L.backSlot(grid, 1, 1000)
-check('P5 za P3 po tej samej stronie', near(b1.pos.x, -1.5) and near(b1.pos.z, -16))
-local b2 = L.backSlot(grid, 2, 1000)
-check('P6 za P4 po tej samej stronie', near(b2.pos.x, 1.5) and near(b2.pos.z, -20))
-check('numer pola P6', b2.gridPos == 6)
-check('splajn pola P5 za P3', near(b1.spline, 0.988 - 8 / 1000))
-local single = L.backSlot({ grid[1] }, 1, 1000)
-check('jedno auto: pole 8 m za nim', near(single.pos.z, -8))
-check('pusta stawka: brak pola', L.backSlot({}, 1, 1000) == nil)
+-- kolejność pól z położenia
+local order = L.gridOrder({ 0.975, 0.980, 0.970, 0.985 })
+check('kolejność pól: najbliżej linii = P1', order[1] == 4 and order[2] == 2 and order[3] == 1 and order[4] == 3)
+local order2 = L.gridOrder({ 0.995, 0.002, 0.990 })
+check('kolejność pól przez linię mety', order2[1] == 2 and order2[2] == 1 and order2[3] == 3)
+check('minął punkt', L.passedPoint(0.31, 0.30) and not L.passedPoint(0.29, 0.30))
+check('kara za spóźnienie > 20 m = stop & go', L.latePenalty(-35, cfg).kind == 'sg')
+check('kara za spóźnienie < 20 m = DT', L.latePenalty(-8, cfg).kind == 'dt')
+check('stop & go 10 s', L.parsePenalty('STOP_GO', cfg).param == 10)
+check('stop & go surowszy niż DT', L.stronger(L.parsePenalty('DT', cfg), L.parsePenalty('SG', cfg)).kind == 'sg')
 check('kara za spóźnienie domyślnie DT', L.parsePenalty(cfg.LATE_PENALTY, cfg).kind == 'dt')
 
 print(string.format('logika: pass=%d fail=%d', pass, fail))

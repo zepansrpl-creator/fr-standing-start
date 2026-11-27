@@ -8,7 +8,7 @@ It is a **CSP online script**. Server admins only add a few lines to the server 
 
 ## What happens in a race
 
-1. **The game's own race start begins the formation lap.** At that moment the script records every car's grid slot (qualifying order).
+1. **The game's own race start begins the formation lap.** At that moment the script records every car's grid slot. Slot numbers come from the cars' positions on the grid (nearest the line = P1), not from the race order, so a car moved to the pits doesn't take P1.
 2. **Formation lap.** A speed limit is optional. Drivers see their grid slot number on screen.
 3. **Lining up.** About 300 m before the slot, a countdown appears, e.g. `P3 · ↑ 42 m`. The slot is marked on the tarmac with a glowing box and a 1.5 m gate with the slot number above the front line:
    - blue: approaching,
@@ -31,14 +31,16 @@ It is a **CSP online script**. Server admins only add a few lines to the server 
 | More than 0.5 m to the side of the slot | warning with arrow and yellow guide line on the tarmac |
 | More than 2 m to the side when the lights come on | **drive-through** |
 | Moving more than 0.5 m before the lights go out | **jump start → drive-through** |
-| Leaving the pits for the formation lap | grid slot at the back of the grid |
-| Pit lane start (staying in the pits), leaving after the lights come on but before lights out | **jump start → drive-through** |
-| Entering the pit lane (or being moved to the pits) during the formation lap | pit lane start |
+| Pit start (car in the pits at the game's start, entering the pit lane during the formation lap, or joining during the start procedure) | may drive the formation lap but must be back in the pit lane before the lights; may leave only on the **green pit exit light**, shown once the whole field has passed a point 300 m past P1's slot (≈ turn 1), or after 30 s |
+| Pit start: leaving the pit lane before the green light | **drive-through** |
+| Pit start: not in the pit lane when the lights come on | **drive-through** |
 | Not moving off for the formation lap | counted as ready, admin decides |
-| Not in your grid slot when the first light comes on | **drive-through** |
-| Joined after the start | no grid slot, pit lane start |
+| Not in your grid slot when the first light comes on, within 20 m | **drive-through** |
+| Not in your grid slot when the first light comes on, more than 20 m away | **stop & go 10 s** (stop in your pit box; the car is held on the brakes until the time is up) |
 
-A **drive-through** must be served within 3 laps by driving through the pit lane **without stopping**. A pit stop does not count. The driver sees how many laps are left. Serving (or not serving) the penalty is shown on screen and in chat.
+A **stop & go** is served by stopping in your own pit box for 10 s; the car is held on the brakes and a countdown is shown. A **drive-through** must be served within 3 laps by driving through the pit lane **without stopping**. A pit stop does not count. The driver sees how many laps are left. Serving (or not serving) the penalty is shown on screen and in chat.
+
+Drivers who join during the start procedure see that they start from the pits (requires an admin to be connected).
 
 All values can be changed (see [All settings](#all-settings)).
 
@@ -60,7 +62,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.1.9/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.0/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -71,7 +73,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.1.9`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.0`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -142,9 +144,14 @@ All settings go into the `[FR_STANDING_START]` section. Anything you leave out u
 | `LATERAL_TOLERANCE_M` | `0.5` | allowed sideways offset |
 | `LATERAL_PENALTY_M` | `2.0` | sideways offset at the first light above this = penalty |
 | `ALLOW_REVERSE` | `0` | `1` = reversing also cancels a large overshoot |
-| `OVERSHOOT_PENALTY` | `DRIVE_THROUGH` | `DRIVE_THROUGH`, `TELEPORT` or `WARNING` |
+| `OVERSHOOT_PENALTY` | `DRIVE_THROUGH` | `DRIVE_THROUGH`, `STOP_GO`, `TELEPORT` or `WARNING` |
 | `JUMP_START_PENALTY` | `DRIVE_THROUGH` | same options |
 | `LATE_PENALTY` | `DRIVE_THROUGH` | not in your slot when the lights come on |
+| `LATE_FAR_M` | `20` | ...and further than this from the slot: |
+| `LATE_FAR_PENALTY` | `STOP_GO` | penalty when far from the slot |
+| `STOP_GO_SECONDS` | `10` | stop time for a stop & go |
+| `PIT_RELEASE_M` | `300` | pit starters: green light once the field passes this far past P1's slot |
+| `PIT_RELEASE_MAX_S` | `30` | ...or this long after lights out |
 | `PENALTY_LAPS` | `3` | laps allowed to serve a drive-through |
 | `TELEPORT_SECONDS` | `10` | time held in the pits for `TELEPORT` |
 | `JUMP_START_M` | `0.5` | movement before lights out that counts as a jump start |
