@@ -58,7 +58,9 @@ check('0.7 m obok = obok pola', L.classifySlot(0.1, 0.1, 0, cfg, 0.7) == S.WRONG
 check('obok pola w ruchu = dojazd', L.classifySlot(-3, -3, 10, cfg, 2.5) == S.APPROACH)
 check('kara za stanie obok > 2 m', L.isLanePenalty(S.WRONG_LANE, -2.4, cfg))
 check('bez kary 1.5 m obok', not L.isLanePenalty(S.WRONG_LANE, 1.5, cfg))
-check('obok pola liczy się jako gotowy', L.isReadyState(S.WRONG_LANE))
+check('obok pola to jeszcze nie gotowy', not L.isReadyState(S.WRONG_LANE))
+check('przed polem to jeszcze nie gotowy', not L.isReadyState(S.SHORT))
+check('trochę za daleko to jeszcze nie gotowy', not L.isReadyState(S.OVERSHOOT))
 check('DT: 3 okrążenia na start', L.dtLapsLeft(3, 0, 0) == 3)
 check('DT: po 2 okrążeniach zostało 1', L.dtLapsLeft(3, 1, 3) == 1)
 check('domyślnie kara od 10 m', cfg.GRID_WARNING_M == 10)
@@ -89,7 +91,7 @@ check('surowsza kara', L.stronger(dt, tp) == tp and L.stronger(tp, dt) == tp and
 local cfgA = L.readConfig(function(k) if k == 'AUTO_LIGHTS' then return 1 end end)
 check('automat: nie wszyscy gotowi', not L.autoLightsDue({ S.IN_SLOT, S.APPROACH }, 100, nil, 99, cfgA))
 check('automat: wszyscy, za krótko', not L.autoLightsDue({ S.IN_SLOT, S.PIT_START }, 100, 98, 90, cfgA))
-check('automat: wszyscy 5 s', L.autoLightsDue({ S.IN_SLOT, S.OVERSHOOT }, 100, 95, 90, cfgA))
+check('automat: wszyscy 5 s', L.autoLightsDue({ S.IN_SLOT, S.PIT_START }, 100, 95, 90, cfgA))
 check('automat: limit czasu', L.autoLightsDue({ S.IN_SLOT, S.APPROACH }, 200, nil, 100, cfgA))
 
 -- konfiguracja

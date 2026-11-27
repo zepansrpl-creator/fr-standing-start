@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.3'
+local VERSION = '0.2.4'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -182,9 +182,11 @@ function L.dtLapsLeft(laps, startLap, lapCount)
 end
 
 -- Czy stan oznacza, że auto czeka na start (stoi).
+-- Gotowy do świateł = stoi poprawnie na polu, w alei albo nie ma już czego poprawić.
+-- Stojący przed polem, obok pola albo trochę za daleko jeszcze się poprawia, więc nie jest gotowy
+-- (czeka go limit czasu AUTO_TIMEOUT_S).
 function L.isReadyState(s)
-  return s == L.S.IN_SLOT or s == L.S.SHORT or s == L.S.OVERSHOOT or s == L.S.OVERSHOOT_PEN
-    or s == L.S.PIT_START or s == L.S.NO_SLOT or s == L.S.WRONG_LANE or s == L.S.DNS
+  return s == L.S.IN_SLOT or s == L.S.OVERSHOOT_PEN or s == L.S.PIT_START or s == L.S.NO_SLOT or s == L.S.DNS
 end
 
 -- Stan świateł w chwili `now` (ms czasu sesji).

@@ -1,5 +1,10 @@
 # Zmiany
 
+## 0.2.4
+
+### Poprawki
+- Automat świateł skraca czekanie do 5 s dopiero, gdy wszyscy stoją poprawnie na swoich polach albo w alei. Kto stoi przed polem, obok pola albo trochę za daleko, ma jeszcze czas do końca limitu (60 s) na poprawienie ustawienia.
+
 ## 0.2.3
 
 ### Poprawki

@@ -739,5 +739,17 @@ env.red = 0
 for _ = 1, 1400 do frame(50) end -- 70 s stania na polach
 check('S34: brak świateł, gdy nikt nie przejechał formującego', (env.red or 0) == 0)
 
+---------------------------------------------------------------- scenariusz 35: auto stoi źle (obok pola) – automat czeka limit czasu, nie 5 s
+setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 5, AUTO_TIMEOUT_S = 30 })
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+env.events[1].cb(env.cars[1], { state = 12, offsetCm = 0, pending = 0 }) -- auto 1 stoi obok pola
+driveFormation(0.0)
+local litAt35
+for k = 1, 800 do env.red = 0; frame(50); if not litAt35 and env.red > 0 then litAt35 = k end end
+check('S35: brak świateł po 5 s, gdy ktoś stoi źle', not litAt35 or litAt35 > 200)
+check('S35: światła po limicie czasu', litAt35 ~= nil)
+
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

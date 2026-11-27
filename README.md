@@ -44,7 +44,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.3/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.4/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -57,7 +57,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.3`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.4`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.

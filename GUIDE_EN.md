@@ -62,7 +62,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.3/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.4/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -73,7 +73,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.3`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.4`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -116,7 +116,7 @@ Chat commands (admin only, hidden from other drivers):
 | `!frss skip` | skip the formation lap (test) |
 | `!frss reactions` | copy the reaction time list to the clipboard |
 
-**Automatic lights:** with `AUTO_LIGHTS = 1`, the admin's game starts the lights once every car has been stationary for 5 s, or 60 s after the first car stopped in its slot. An admin must be connected for this to work.
+**Automatic lights:** with `AUTO_LIGHTS = 1`, the admin's game starts the lights 5 s after every car is correctly in its slot (or in the pit lane), or at the latest 60 s after the first car arrived at its slot. Cars parked short of, beside or slightly past their slot keep the full 60 s to correct it. An admin must be connected for this to work.
 
 ---
 
