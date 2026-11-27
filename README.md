@@ -30,7 +30,7 @@ Kierowcy nie instalują nic. Serwer podaje skrypt każdemu, kto wchodzi na serwe
 | Cofnięcie po przestrzeleniu do 10 m | można poprawić ustawienie |
 | Cofnięcie po przestrzeleniu ponad 10 m | kara zostaje (liczy się najdalszy punkt) |
 | Ruch ponad 0,5 m przed zgaszeniem świateł | **falstart → drive-through** |
-| Start z boksu (auto w alei/boksie przy starcie z gry, wjazd do alei na formującym albo dołączenie w trakcie procedury) | może przejechać formujące, ale przed światłami musi wrócić do alei; wyjazd dopiero na **zielone światło wyjazdu**, gdy cała stawka minie punkt 300 m za polem P1 (≈ T1) albo po 30 s |
+| Start z boksu (auto w alei/boksie przy starcie z gry, wjazd do alei na formującym albo dołączenie w trakcie procedury) | może przejechać formujące, ale przed światłami musi wrócić do alei; nie widzi świateł startowych, tylko swoje światło wyjazdu; wyjazd dopiero na **zielone**, gdy cała stawka minie punkt 500 m od startu albo po 30 s |
 | Start z boksu: wyjazd z alei przed zielonym | **drive-through** |
 | Start z boksu: poza aleją przy zapaleniu świateł | **drive-through** |
 | Nie stałeś na polu przy zapaleniu świateł, do 20 m od pola | **drive-through** |
@@ -82,7 +82,8 @@ AUTO_LIGHTS = 0
 | `LATE_FAR_M` | `20` | ...a przy większej odległości od pola: |
 | `LATE_FAR_PENALTY` | `STOP_GO` | kara dla daleko od pola |
 | `STOP_GO_SECONDS` | `10` | czas postoju przy stop & go |
-| `PIT_RELEASE_M` | `300` | start z boksu: zielone, gdy stawka minie punkt tyle metrów za polem P1 |
+| `PIT_RELEASE_M` | `500` | start z boksu: zielone, gdy cała stawka przejedzie tyle metrów od startu |
+| `PIT_EXIT_PENALTY` | `DRIVE_THROUGH` | start z boksu: wyjazd z alei przed zielonym |
 | `PIT_RELEASE_MAX_S` | `30` | ...albo po tylu sekundach od zgaszenia świateł |
 | `PENALTY_LAPS` | `3` | okrążenia na odbycie drive-through |
 | `TELEPORT_SECONDS` | `10` | blokada w boksie przy karze `TELEPORT` |

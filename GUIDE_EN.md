@@ -31,7 +31,7 @@ It is a **CSP online script**. Server admins only add a few lines to the server 
 | More than 0.5 m to the side of the slot | warning with arrow and yellow guide line on the tarmac |
 | More than 2 m to the side when the lights come on | **drive-through** |
 | Moving more than 0.5 m before the lights go out | **jump start → drive-through** |
-| Pit start (car in the pits at the game's start, entering the pit lane during the formation lap, or joining during the start procedure) | may drive the formation lap but must be back in the pit lane before the lights; may leave only on the **green pit exit light**, shown once the whole field has passed a point 300 m past P1's slot (≈ turn 1), or after 30 s |
+| Pit start (car in the pits at the game's start, entering the pit lane during the formation lap, or joining during the start procedure) | may drive the formation lap but must be back in the pit lane before the lights; do not see the start lights, only their own pit exit light, and may leave only when it turns **green**, shown once the whole field has passed 500 m from the start, or after 30 s |
 | Pit start: leaving the pit lane before the green light | **drive-through** |
 | Pit start: not in the pit lane when the lights come on | **drive-through** |
 | Not moving off for the formation lap | counted as ready, admin decides |
@@ -150,7 +150,8 @@ All settings go into the `[FR_STANDING_START]` section. Anything you leave out u
 | `LATE_FAR_M` | `20` | ...and further than this from the slot: |
 | `LATE_FAR_PENALTY` | `STOP_GO` | penalty when far from the slot |
 | `STOP_GO_SECONDS` | `10` | stop time for a stop & go |
-| `PIT_RELEASE_M` | `300` | pit starters: green light once the field passes this far past P1's slot |
+| `PIT_RELEASE_M` | `500` | pit starters: green light once the whole field has covered this distance from the start |
+| `PIT_EXIT_PENALTY` | `DRIVE_THROUGH` | pit starters leaving before the green light |
 | `PIT_RELEASE_MAX_S` | `30` | ...or this long after lights out |
 | `PENALTY_LAPS` | `3` | laps allowed to serve a drive-through |
 | `TELEPORT_SECONDS` | `10` | time held in the pits for `TELEPORT` |

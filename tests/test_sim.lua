@@ -564,8 +564,9 @@ tx = {}; frame(50)
 local wait = false
 for _, t in ipairs(tx) do if t:find('WYJAZD Z ALEI: CZEKAJ') then wait = true end end
 check('S24: po starcie czerwone światło wyjazdu', wait and #env.penalties == 0)
--- auto 1 (P2) mija T1 (300 m za polem P1)
-moveCar(env.cars[1], (0.980 + 0.31) % 1, 150)
+-- auto 1 (P2) mija punkt 500 m za polem P1
+-- jedzie 510 m w krokach (odległość liczona z przejechanej drogi)
+for k = 1, 51 do moveCar(env.cars[1], (0.975 + k * 0.01) % 1, 150); frame(50) end
 tx = {}; frame(50); frame(50)
 local go = false
 for _, t in ipairs(tx) do if t:find('WYJAZD Z ALEI: JEDŹ') then go = true end end
@@ -658,6 +659,21 @@ env.cars[1].speedKmh = 0
 local seen29 = false
 for _ = 1, 300 do env.red = 0; frame(50); if env.red > 0 then seen29 = true end end
 check('S29: światła, gdy wszyscy naprawdę stoją', seen29)
+
+---------------------------------------------------------------- scenariusz 30: startujący z boksu nie widzi świateł startowych, tylko swoje
+setup(nil)
+env.cars[0].isInPitlane = true; env.cars[0].isInPit = true
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+press('Zapal światła')
+local maxCircles = 0
+for _ = 1, 120 do env.circles = 0; frame(50); maxCircles = math.max(maxCircles, env.circles) end
+check('S30: w trakcie świateł widać tylko 1 światło (wyjazd z alei)', maxCircles == 1)
+-- wyjazd z alei przy zapalonych światłach startowych = DT
+env.cars[0].isInPit = false; env.cars[0].isInPitlane = false; frame(50)
+for _ = 1, 100 do frame(50) end
+check('S30: wyjazd za wcześnie = drive-through', #env.penalties == 1 and env.penalties[1][1] == 1 and env.penalties[1][2] == 3)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

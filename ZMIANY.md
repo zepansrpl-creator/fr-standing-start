@@ -5,6 +5,8 @@
 ### Poprawki
 - Automat świateł czeka na auta, które jadą po torze – meldunek „gotowy” liczy się tylko, gdy auto naprawdę stoi na polu albo jest w alei.
 - Kierowca dołączający w trakcie formującego dostaje informację o starcie z boksu także bez admina na serwerze (z meldunków innych aut); admin dodatkowo co 10 s przypomina fazę startu.
+- Startujący z boksu nie widzą świateł startowych, tylko swoje światło wyjazdu z alei; wyjazd przed zielonym = drive-through (`PIT_EXIT_PENALTY`).
+- Zielone dla startujących z boksu, gdy cała stawka przejedzie 500 m od startu (było 300 m).
 
 ## 0.2.0
 

@@ -31,8 +31,9 @@ L.DEFAULTS = {
   LATE_FAR_M = 20,             -- ...a był dalej niż tyle od pola
   LATE_FAR_PENALTY = 'STOP_GO',
   STOP_GO_SECONDS = 10,        -- czas postoju w boksie przy karze stop & go
-  PIT_RELEASE_M = 300,         -- start z boksu: wyjazd dopiero, gdy cała stawka minie punkt tyle metrów za polem P1 (≈ T1)
+  PIT_RELEASE_M = 500,         -- start z boksu: wyjazd dopiero, gdy cała stawka przejedzie tyle metrów od startu (od pola P1)
   PIT_RELEASE_MAX_S = 30,      -- ...albo po tylu sekundach od zgaszenia świateł
+  PIT_EXIT_PENALTY = 'DRIVE_THROUGH', -- start z boksu: wyjazd z alei przed zielonym światłem
   PENALTY_LAPS = 3,            -- ile okrążeń na odbycie drive-through
   TELEPORT_SECONDS = 10,       -- blokada w boksie przy karze TELEPORT
   JUMP_START_M = 0.5,          -- ruch większy niż tyle przed zgaszeniem świateł = falstart
@@ -600,6 +601,7 @@ local sendPhase = ac.OnlineEvent({
 end, ac.SharedNamespace.ServerScript)
 
 local pitReleased = false
+local raceProg = {} -- [carIndex] = { prev = splajn, dist = przejechane m od zgaszenia świateł }
 local function broadcastPhase()
   -- klient admina ogłasza fazę (powtarzaną dla kierowców, którzy dołączą później)
   if isAdmin() then pcall(sendPhase, { phase = phase, released = pitReleased and 1 or 0 }, true) end
@@ -738,13 +740,14 @@ end
 local function finishStart()
   phase = L.P.RACING
   lightsDoneAt = gameS()
+  raceProg = {}
   me.outPos = myCar.position:clone()
   local n = mySlotNumber()
   local name = myName()
   local pen = nil
 
   if me.jumpMs then
-    local p = L.parsePenalty(cfg.JUMP_START_PENALTY, cfg)
+    local p = L.parsePenalty(me.pitStart and cfg.PIT_EXIT_PENALTY or cfg.JUMP_START_PENALTY, cfg)
     pen = L.stronger(pen, p)
     if me.pitStart then
       chat(string.format(T('chatPit'), cfg.CHAT_PREFIX, name, penaltyText(p)))
@@ -1101,23 +1104,29 @@ local function updateStopGo(frameDt)
 end
 
 -- Zielone światło wyjazdu z alei dla startujących z boksu:
--- cała stawka minęła punkt PIT_RELEASE_M za polem P1 (≈ T1) albo minął limit czasu.
+-- cała stawka przejechała PIT_RELEASE_M od startu (liczone od pola P1) albo minął limit czasu.
 local function pitReleaseDue()
   if pitReleased then return true end
   if not lightsDoneAt then return false end
   if gameS() - lightsDoneAt >= cfg.PIT_RELEASE_MAX_S then return true end
   local p1
-  for _, sl in pairs(slots) do if sl.gridPos == 1 then p1 = sl end end
+  for _, sl in pairs(slots) do if sl.gridPos == 1 and not sl.pit then p1 = sl end end
   if not p1 then return false end
   local trackLen = sim.trackLengthM > 0 and sim.trackLengthM or 4000
-  local t1 = (p1.spline + cfg.PIT_RELEASE_M / trackLen) % 1
+  local all = true
   for i, sl in pairs(slots) do
     local c = ac.getCar(i)
-    if c and c.isConnected and not sl.pit and not c.isInPitlane and not c.isInPit then
-      if not L.passedPoint(c.splinePosition, t1) then return false end
+    if c and c.isConnected and not sl.pit then
+      local pr = raceProg[i]
+      if not pr then pr = { prev = sl.spline, dist = 0 }; raceProg[i] = pr end
+      pr.dist = pr.dist + L.travelDelta(pr.prev, c.splinePosition, trackLen)
+      pr.prev = c.splinePosition
+      -- odległość od startu: pole tego auta względem pola P1 + to, co przejechało
+      local fromStart = L.splineDelta(sl.spline, p1.spline) * trackLen + pr.dist
+      if not (c.isInPitlane or c.isInPit) and fromStart < cfg.PIT_RELEASE_M then all = false end
     end
   end
-  return true
+  return all
 end
 
 local function updatePitRelease()
@@ -1138,7 +1147,7 @@ local function updatePitRelease()
   if not myCar.isInPitlane and not myCar.isInPit then
     me.pitWait = false
     me.state = L.S.RACING
-    local p = L.parsePenalty(cfg.JUMP_START_PENALTY, cfg)
+    local p = L.parsePenalty(cfg.PIT_EXIT_PENALTY, cfg)
     chat(string.format(T('chatPit'), cfg.CHAT_PREFIX, myName(), penaltyText(p)))
     notify(T('pitEarly'), 8, rgbm.colors.red)
     applyPenalty(p)
@@ -1404,12 +1413,13 @@ end
 -- światło wyjazdu z alei dla startujących z boksu
 local function drawPitLight()
   local green = not me.pitWait and me.pitGoAt and gameS() - me.pitGoAt < 8
-  if not me.pitWait and not green then return end
+  local waiting = me.pitWait or (phase == L.P.LIGHTS and me.pitStart and not me.late and not me.jumpMs)
+  if not waiting and not green then return end
   local w = screen()
   local r, y = 30, 90
   ui.drawRectFilled(vec2(w / 2 - r - 14, y - r - 14), vec2(w / 2 + r + 14, y + r + 14), rgbm(0, 0, 0, 0.75), 10)
   ui.drawCircleFilled(vec2(w / 2, y), r, green and rgbm(0.1, 1, 0.2, 1) or rgbm(1, 0.05, 0.03, 1), 32)
-  banner(T(green and 'pitGo' or 'pitWait'), 0, 26, green and rgbm(0.2, 1, 0.3, 1) or rgbm.colors.white)
+  banner(T(green and 'pitGo' or 'pitWait'), 60, 26, green and rgbm(0.2, 1, 0.3, 1) or rgbm.colors.white)
 end
 
 local function drawDriveThroughInfo()
@@ -1442,7 +1452,10 @@ function script.drawUI()
   if previewOn then
     drawPreview()
   else
-    if phase == L.P.LIGHTS then drawLights() end
+    -- startujący z boksu nie widzą świateł startowych, tylko swoje światło wyjazdu z alei
+    if phase == L.P.LIGHTS then
+      if me.pitStart and not me.late then drawPitLight() else drawLights() end
+    end
 
     if phase == L.P.FORMATION or phase == L.P.LIGHTS then
       local st = me.state
@@ -1480,7 +1493,7 @@ function script.drawUI()
       elseif st == L.S.DNS then
         banner(T('dns'), 0, 24, rgbm.colors.yellow)
       end
-      if phase == L.P.LIGHTS and st ~= L.S.LATE then
+      if phase == L.P.LIGHTS and st ~= L.S.LATE and not me.pitStart then
         banner(T('waitLights'), 60, 18)
       end
     elseif phase == L.P.RACING then
