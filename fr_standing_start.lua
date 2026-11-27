@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.1'
+local VERSION = '0.2.2'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -39,7 +39,7 @@ L.DEFAULTS = {
   JUMP_START_M = 0.5,          -- ruch większy niż tyle przed zgaszeniem świateł = falstart
   LIGHTS_COUNT = 5,
   LIGHTS_INTERVAL_MS = 1000,   -- co ile zapala się kolejne światło
-  LIGHTS_LEAD_MS = 3000,       -- czas od kliknięcia admina do zapalenia pierwszego światła
+  LIGHTS_LEAD_MS = 5000,       -- czas od komendy do zapalenia pierwszego światła (odliczanie „X s do świateł”)
   HOLD_MIN_MS = 200,           -- losowa przerwa po zapaleniu wszystkich świateł
   HOLD_MAX_MS = 3000,
   AUTO_LIGHTS = 0,             -- 1: klient admina sam zapala światła, gdy wszyscy stoją
@@ -155,8 +155,9 @@ end
 function L.physicallyReady(st, inPits, speedKmh)
   if not L.isReadyState(st) then return false end
   if inPits then return true end
-  if st == L.S.NO_SLOT or st == L.S.PIT_START then return false end -- bez pola / z boksu, a jest na torze
-  return speedKmh < 2
+  -- meldunek „stoję” jest wiarygodny (kierowca sam sprawdza, że stoi); odrzucamy go tylko,
+  -- gdy auto wyraźnie jedzie – np. dołączył bez pola albo meldunek jest nieaktualny
+  return (speedKmh or 0) < 10
 end
 
 -- Czy auto minęło punkt toru (np. T1) – dodatnia różnica na splajnie (do pół okrążenia).
@@ -294,6 +295,11 @@ L.TEXT = {
     pending = 'kara czeka',
     dns = 'Nie ruszyłeś na okrążenie formujące – czekaj na światła',
     pitStartMsg = 'Startujesz z boksu',
+    pitStartFormation = 'Możesz ruszyć do okrążenia formującego, ale startujesz do wyścigu z pitlane',
+    lightsIn = '%d s do świateł',
+    autoWaitAll = 'Automat: wszyscy stoją – światła za %d s',
+    autoWaitTimeout = 'Automat: czekam na %d aut – światła najpóźniej za %d s',
+    autoWaitFirst = 'Automat: czekam, aż pierwsze auto stanie na polu',
     pitOut = 'START Z BOKSU – po okrążeniu formującym zjedź do alei serwisowej',
     pitWait = 'WYJAZD Z ALEI: CZEKAJ',
     pitGo = 'WYJAZD Z ALEI: JEDŹ',
@@ -384,6 +390,11 @@ L.TEXT = {
     pending = 'penalty pending',
     dns = 'You did not start the formation lap – wait for the lights',
     pitStartMsg = 'You start from the pits',
+    pitStartFormation = 'You may drive the formation lap, but you start the race from the pit lane',
+    lightsIn = '%d s to the lights',
+    autoWaitAll = 'Auto: everyone stopped – lights in %d s',
+    autoWaitTimeout = 'Auto: waiting for %d cars – lights at the latest in %d s',
+    autoWaitFirst = 'Auto: waiting for the first car to stop in its slot',
     pitOut = 'PIT START – after the formation lap, enter the pit lane',
     pitWait = 'PIT EXIT: WAIT',
     pitGo = 'PIT EXIT: GO',
@@ -601,6 +612,7 @@ local sendPhase = ac.OnlineEvent({
 end, ac.SharedNamespace.ServerScript)
 
 local pitReleased = false
+local startRaceProgress -- zdefiniowane niżej
 local raceProg = {} -- [carIndex] = { prev = splajn, dist = przejechane m od zgaszenia świateł }
 local function broadcastPhase()
   -- klient admina ogłasza fazę (powtarzaną dla kierowców, którzy dołączą później)
@@ -740,7 +752,7 @@ end
 local function finishStart()
   phase = L.P.RACING
   lightsDoneAt = gameS()
-  raceProg = {}
+  startRaceProgress()
   me.outPos = myCar.position:clone()
   local n = mySlotNumber()
   local name = myName()
@@ -840,6 +852,9 @@ local function checkLateJoin()
     phase = L.P.RACING
     me.pitWait = not pitReleased
     me.state = L.S.PIT_START
+    -- nie widział zgaszenia świateł: liczymy dystans stawki od teraz
+    lightsDoneAt = gameS()
+    startRaceProgress()
   else
     phase = L.P.FORMATION
     me.state = (myCar.isInPitlane or myCar.isInPit) and L.S.PIT_START or L.S.PIT_OUT
@@ -1105,28 +1120,38 @@ end
 
 -- Zielone światło wyjazdu z alei dla startujących z boksu:
 -- cała stawka przejechała PIT_RELEASE_M od startu (liczone od pola P1) albo minął limit czasu.
+startRaceProgress = function()
+  -- położenie wszystkich aut na torze w chwili zgaszenia świateł (bez potrzeby znania pól)
+  raceProg = {}
+  for i = 0, sim.carsCount - 1 do
+    local c = ac.getCar(i)
+    if c and c.isConnected and not c.isInPitlane and not c.isInPit then
+      raceProg[i] = { prev = c.splinePosition, start = c.splinePosition, dist = 0 }
+    end
+  end
+end
+
 local function pitReleaseDue()
   if pitReleased then return true end
   if not lightsDoneAt then return false end
   if gameS() - lightsDoneAt >= cfg.PIT_RELEASE_MAX_S then return true end
-  local p1
-  for _, sl in pairs(slots) do if sl.gridPos == 1 and not sl.pit then p1 = sl end end
-  if not p1 then return false end
   local trackLen = sim.trackLengthM > 0 and sim.trackLengthM or 4000
-  local all = true
-  for i, sl in pairs(slots) do
+  -- lider na starcie = auto najbardziej z przodu w chwili zgaszenia świateł
+  local lead
+  for _, pr in pairs(raceProg) do
+    if not lead or L.splineDelta(pr.start, lead) > 0 then lead = pr.start end
+  end
+  if not lead then return false end
+  for i, pr in pairs(raceProg) do
     local c = ac.getCar(i)
-    if c and c.isConnected and not sl.pit then
-      local pr = raceProg[i]
-      if not pr then pr = { prev = sl.spline, dist = 0 }; raceProg[i] = pr end
+    if c and c.isConnected then
       pr.dist = pr.dist + L.travelDelta(pr.prev, c.splinePosition, trackLen)
       pr.prev = c.splinePosition
-      -- odległość od startu: pole tego auta względem pola P1 + to, co przejechało
-      local fromStart = L.splineDelta(sl.spline, p1.spline) * trackLen + pr.dist
-      if not (c.isInPitlane or c.isInPit) and fromStart < cfg.PIT_RELEASE_M then all = false end
+      local fromStart = L.splineDelta(pr.start, lead) * trackLen + pr.dist
+      if not (c.isInPitlane or c.isInPit) and fromStart < cfg.PIT_RELEASE_M then return false end
     end
   end
-  return all
+  return true
 end
 
 local function updatePitRelease()
@@ -1201,6 +1226,13 @@ local function updateAutoLights()
   local allReady = #list > 0
   for _, st in ipairs(list) do if not L.isReadyState(st) then allReady = false break end end
   if allReady then auto.readySince = auto.readySince or t else auto.readySince = nil end
+  -- stan automatu do panelu admina
+  local waiting = 0
+  for _, st2 in ipairs(list) do if not L.isReadyState(st2) then waiting = waiting + 1 end end
+  if auto.readySince then auto.info = T('autoWaitAll', math.max(0, math.ceil(cfg.AUTO_DELAY_S - (t - auto.readySince))))
+  elseif auto.firstReadyAt then
+    auto.info = T('autoWaitTimeout', waiting, math.max(0, math.ceil(cfg.AUTO_TIMEOUT_S - (t - auto.firstReadyAt))))
+  else auto.info = T('autoWaitFirst') end
   if L.autoLightsDue(list, t, auto.readySince, auto.firstReadyAt, cfg) then
     auto.firstReadyAt, auto.readySince = nil, nil
     adminSend(L.CMD.LIGHTS)
@@ -1216,6 +1248,7 @@ local function debugValues()
   ac.debug('FRSS przejechane m', math.floor(me.traveled or 0))
   ac.debug('FRSS do pola m', me.dist and string.format('%.2f', me.dist) or '-')
   ac.debug('FRSS pole P', mySlotNumber())
+  ac.debug('FRSS automat', auto.info or '-')
 end
 
 function script.update(dt)
@@ -1452,6 +1485,11 @@ function script.drawUI()
   if previewOn then
     drawPreview()
   else
+    -- odliczanie do pierwszego światła (dla wszystkich)
+    if phase == L.P.LIGHTS and lightsT0 and clockMs() < lightsT0 then
+      local secs = math.ceil((lightsT0 - clockMs()) / 1000)
+      banner(T('lightsIn', secs), -60, 30, rgbm.colors.white, rgbm(0, 0, 0, 0.75))
+    end
     -- startujący z boksu nie widzą świateł startowych, tylko swoje światło wyjazdu z alei
     if phase == L.P.LIGHTS then
       if me.pitStart and not me.late then drawPitLight() else drawLights() end
@@ -1460,7 +1498,7 @@ function script.drawUI()
     if phase == L.P.FORMATION or phase == L.P.LIGHTS then
       local st = me.state
       if st == L.S.PIT_START then
-        banner(T('pitStart'), 0, 20, rgbm.colors.yellow)
+        banner(T(phase == L.P.FORMATION and 'pitStartFormation' or 'pitStart'), 0, 22, rgbm.colors.yellow)
       elseif st == L.S.PIT_OUT then
         banner(T('pitOut'), 0, 22, rgbm.colors.yellow)
       elseif st == L.S.NO_SLOT then
@@ -1533,6 +1571,7 @@ local function adminUI()
   ui.text('v' .. VERSION)
   ui.text(T('phase', L.text(lang, 'phaseNames')[phase] or '?'))
   ui.text(T('auto', cfg.AUTO_LIGHTS == 1 and T('on') or T('off')))
+  if cfg.AUTO_LIGHTS == 1 and phase == L.P.FORMATION and auto.info then ui.text(auto.info) end
   ui.separator()
   if ui.button(T('btnLights')) and phase == L.P.FORMATION then adminSend(L.CMD.LIGHTS) end
   if ui.button(T('btnAbort')) then adminSend(L.CMD.ABORT) end

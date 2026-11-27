@@ -1,5 +1,16 @@
 # Zmiany
 
+## 0.2.2
+
+### Nowe funkcje
+- Odliczanie „5 s do świateł” dla wszystkich przed zapaleniem pierwszego światła.
+- Startujący z boksu, zanim ruszy, widzi: „Możesz ruszyć do okrążenia formującego, ale startujesz do wyścigu z pitlane”.
+- Panel admina pokazuje stan automatu świateł (ile aut czeka, za ile sekund światła).
+
+### Poprawki
+- Kierowca, który dołączył później i startuje z boksu, dostaje zielone razem z innymi startującymi z boksu (dystans stawki liczony z położenia aut przy zgaszeniu świateł).
+- Automat świateł mniej wrażliwy na zakłócenia prędkości aut innych kierowców.
+
 ## 0.2.1
 
 ### Poprawki

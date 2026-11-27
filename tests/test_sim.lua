@@ -121,6 +121,7 @@ local function setup(serverCfg)
   dofile('fr_standing_start.lua')
   serverCfg = serverCfg or {}
   if serverCfg.HOLD_MIN_MS == nil then serverCfg.HOLD_MIN_MS = 1000; serverCfg.HOLD_MAX_MS = 1000 end
+  if serverCfg.LIGHTS_LEAD_MS == nil then serverCfg.LIGHTS_LEAD_MS = 3000 end
   do
     env.welcome('', { get = function(_, section, key, def)
       if section == 'FR_STANDING_START' and serverCfg[key] ~= nil then return serverCfg[key] end
@@ -503,7 +504,7 @@ check('S20: auto, które nie ruszyło, ma stan „nie ruszył”', dns)
 env.cars[0].isInPit = true; frame(50)
 texts = {}; frame(50)
 local pit = false
-for _, t in ipairs(texts) do if t:find('START Z BOKSU') then pit = true end end
+for _, t in ipairs(texts) do if t:find('z pitlane') or t:find('START Z BOKSU') then pit = true end end
 check('S20: auto w boksie = start z alei', pit)
 ui.dwriteDrawText = old
 
@@ -616,7 +617,7 @@ local old27 = ui.dwriteDrawText
 ui.dwriteDrawText = function(t) tx27[#tx27 + 1] = t end
 frame(50)
 local info = false
-for _, t in ipairs(tx27) do if t:find('START Z BOKSU') then info = true end end
+for _, t in ipairs(tx27) do if t:find('z pitlane') or t:find('BOKSU') then info = true end end
 check('S27: dołączający w trakcie formującego widzi start z boksu', info)
 ui.dwriteDrawText = old27
 
@@ -674,6 +675,58 @@ check('S30: w trakcie świateł widać tylko 1 światło (wyjazd z alei)', maxCi
 env.cars[0].isInPit = false; env.cars[0].isInPitlane = false; frame(50)
 for _ = 1, 100 do frame(50) end
 check('S30: wyjazd za wcześnie = drive-through', #env.penalties == 1 and env.penalties[1][1] == 1 and env.penalties[1][2] == 3)
+
+---------------------------------------------------------------- scenariusz 31: odliczanie „5 s do świateł” i komunikat dla startujących z boksu
+setup({ LIGHTS_LEAD_MS = 5000 })
+env.cars[0].isInPitlane = true; env.cars[0].isInPit = true
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+local tx31 = {}
+local old31 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) tx31[#tx31 + 1] = t end
+frame(50)
+local pitMsg = false
+for _, t in ipairs(tx31) do if t:find('Możesz ruszyć do okrążenia formującego, ale startujesz do wyścigu z pitlane') then pitMsg = true end end
+check('S31: komunikat dla startującego z boksu przed ruszeniem', pitMsg)
+press('Zapal światła')
+tx31 = {}; frame(50)
+local five = false
+for _, t in ipairs(tx31) do if t:find('5 s do świateł') then five = true end end
+check('S31: odliczanie „5 s do świateł”', five)
+ui.dwriteDrawText = old31
+
+---------------------------------------------------------------- scenariusz 32: dołączający po zgaszeniu świateł dostaje zielone razem ze stawką
+setup(nil)
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 30000
+env.cars[0].isInPitlane = true; env.cars[0].isInPit = true
+for _ = 1, 3 do frame(50) end
+env.events[3].cb(env.cars[1], { phase = 4, released = 0 })
+frame(50)
+-- auto 1 przejeżdża 510 m
+for k = 1, 51 do moveCar(env.cars[1], (0.975 + k * 0.01) % 1, 150); frame(50) end
+local tx32 = {}
+local old32 = ui.dwriteDrawText
+ui.dwriteDrawText = function(t) tx32[#tx32 + 1] = t end
+frame(50)
+local go32 = false
+for _, t in ipairs(tx32) do if t:find('JEDŹ') then go32 = true end end
+check('S32: dołączający dostaje zielone po przejechaniu stawki 500 m (przed limitem 30 s)', go32)
+ui.dwriteDrawText = old32
+
+---------------------------------------------------------------- scenariusz 33: limit czasu automatu działa, gdy ktoś jeździ z boksu
+setup({ AUTO_LIGHTS = 1, AUTO_DELAY_S = 5, AUTO_TIMEOUT_S = 20 })
+env.cars[2] = makeCar(2, 0.6, 0); env.sim.carsCount = 3
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+press('Pomiń formujące (test)')
+frame(50)
+env.events[1].cb(env.cars[1], { state = 4, offsetCm = 0, pending = 0 })
+env.cars[2].speedKmh = 120
+env.events[1].cb(env.cars[2], { state = 14, offsetCm = 0, pending = 0 })
+local litAt33
+for k = 1, 600 do env.red = 0; frame(50); if not litAt33 and env.red > 0 then litAt33 = k end end
+check('S33: światła po limicie czasu (20 s + 3 s), mimo auta z boksu na torze', litAt33 and litAt33 >= 440 and litAt33 <= 480)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)
