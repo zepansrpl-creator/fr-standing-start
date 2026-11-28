@@ -61,7 +61,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.8/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.9/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -72,7 +72,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.8`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.9`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -186,4 +186,6 @@ Bug reports and ideas: [GitHub Issues](https://github.com/zepansrpl-creator/fr-s
 
 ---
 
-MIT licence – free to use and modify, keeping the author notice. © 2026 Maciej Szczepaniak
+© 2026 Maciej Szczepaniak. All rights reserved – see [LICENSE](LICENSE).
+
+Free to use on any server, loaded from the official GitHub address. Changing the code, re-hosting it, bundling it with other mods or selling it requires the author's written permission.

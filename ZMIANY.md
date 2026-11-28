@@ -1,5 +1,10 @@
 # Zmiany
 
+## 0.2.9
+
+### Nowe funkcje
+- Nowa licencja: wszelkie prawa zastrzeżone, darmowe używanie na serwerach; przerabianie, publikowanie gdzie indziej i sprzedaż tylko za zgodą autora. Wersje do 0.2.8 zostają na licencji MIT.
+
 ## 0.2.8
 
 ### Nowe funkcje

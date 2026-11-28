@@ -43,7 +43,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.8/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.9/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -56,7 +56,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.8`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.9`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -185,4 +185,6 @@ FR Standing Start is a CSP online script that adds a standing start after a form
 
 ## Licencja
 
-MIT – patrz plik [LICENSE](LICENSE). Możesz używać i przerabiać, zachowując informację o autorze.
+© 2026 Maciej Szczepaniak. Wszelkie prawa zastrzeżone – patrz plik [LICENSE](LICENSE).
+
+Każdy może za darmo używać skryptu na swoim serwerze (wczytując go z oficjalnego adresu na GitHubie). Bez pisemnej zgody autora nie wolno go przerabiać, publikować w innym miejscu, dołączać do innych modów ani sprzedawać. Wersje do 0.2.8 zostały wydane na licencji MIT i ta licencja ich dotyczy nadal.
