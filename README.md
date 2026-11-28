@@ -43,7 +43,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.6/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.7/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -56,7 +56,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.6`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.7`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -103,7 +103,7 @@ AUTO_LIGHTS = 0
 3. Panel zostaje na ekranie. Masz w nim:
    - **Zapal światła**: działa w trakcie okrążenia formującego,
    - **Przerwij start (dodatkowe formujące)**: gasi światła, wszyscy jadą jeszcze jedno okrążenie, kary za przestrzelenie przepadają,
-   - **Pomiń formujące (test)**: wszyscy są traktowani tak, jakby już zrobili formujące. Przydaje się do testów w pojedynkę,
+   - **Pomiń formujące (test)**: wszyscy są traktowani tak, jakby już zrobili formujące. Przydaje się do testów w pojedynkę. Można kliknąć już w trakcie odliczania gry przed startem,
    - **listę aut** z polem, stanem i przesunięciem w metrach oraz przyciskiem **Anuluj karę** (działa przed zgaszeniem świateł).
 
 Po starcie w panelu admina pojawia się **lista czasów reakcji wszystkich kierowców** (od najszybszego; falstarty, start z alei i spóźnieni na końcu) i przycisk **„Kopiuj czasy reakcji (Discord)”** – lista trafia do schowka gotowa do wklejenia (Ctrl+V). Lista zostaje do następnego startu, także po zakończeniu wyścigu.

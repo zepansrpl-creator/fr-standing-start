@@ -812,5 +812,34 @@ env.quads, env.maxCol = 0, 0
 frame(50)
 check('S38: na potrójnych ekranach zwykłe kolory (bez świecenia)', env.quads > 0 and env.maxCol <= 1)
 
+---------------------------------------------------------------- S39: „pomiń formujące” w trakcie odliczania gry
+setup({ AUTO_LIGHTS = 0 })
+for _ = 1, 10 do frame(50) end -- odliczanie gry, faza GRID
+press('Pomiń formujące (test)')
+for _ = 1, 10 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+for _ = 1, 20 do frame(50) end -- auto stoi na swoim polu
+runLights()
+check('S39: pominięte przed startem – brak kary dla stojącego na polu', #env.penalties == 0)
+
+---------------------------------------------------------------- S40: światła bez formującego, auto stoi na polu
+setup({ AUTO_LIGHTS = 0 })
+for _ = 1, 10 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+for _ = 1, 20 do frame(50) end
+runLights()
+check('S40: stoi dokładnie na polu przy świetle – brak kary', #env.penalties == 0)
+
+---------------------------------------------------------------- S41: pominięte, ale auto 15 m przed polem
+setup({ AUTO_LIGHTS = 0 })
+for _ = 1, 10 do frame(50) end
+press('Pomiń formujące (test)')
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+for _ = 1, 5 do frame(50) end
+moveCar(env.cars[0], 0.980 - 15 / TRACK, 0)
+for _ = 1, 20 do frame(50) end
+runLights()
+check('S41: pominięte, ale nie na polu – kara DT', #env.penalties == 1 and env.penalties[1][1] == 1)
+
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

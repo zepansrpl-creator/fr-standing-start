@@ -1,5 +1,11 @@
 # Zmiany
 
+## 0.2.7
+
+### Poprawki
+- „Pomiń formujące” kliknięte w trakcie odliczania gry przed startem działa u wszystkich (wcześniej skrypt je pomijał i kierowcy stojący na polu dostawali DT).
+- Auto stojące dokładnie na swoim polu przy pierwszym świetle nie dostaje kary, nawet jeśli nie przejechało formującego.
+
 ## 0.2.6
 
 ### Nowe funkcje

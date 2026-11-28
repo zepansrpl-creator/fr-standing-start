@@ -61,7 +61,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.6/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.7/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -72,7 +72,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.6`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.7`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -102,7 +102,7 @@ Save the event and start it again.
 3. **The panel shows:**
    - **Start lights**: works during the formation lap,
    - **Abort start (extra formation lap)**: switches the lights off and sends everyone round again. Pending grid penalties are dropped,
-   - **Skip formation (test)**: treats everyone as having completed the formation lap. Useful for testing alone,
+   - **Skip formation (test)**: treats everyone as having completed the formation lap. Useful for testing alone. Can be clicked during the game's pre-race countdown,
    - **a list of all cars** with grid slot, status and distance from the slot, plus a **Cancel penalty** button (works before the lights go out),
    - after the start, **all reaction times** and a **Copy reaction times (Discord)** button. Paste with Ctrl+V.
 

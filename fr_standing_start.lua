@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.6'
+local VERSION = '0.2.7'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -282,6 +282,7 @@ L.TEXT = {
     lights = 'START',
     late = 'Nie stałeś na swoim polu przy zapaleniu świateł – kara',
     aborted = 'START PRZERWANY – dodatkowe okrążenie formujące',
+    skipped = 'Okrążenie formujące pominięte – stań na swoim polu',
     reaction = 'Reakcja: %d ms',
     jump = 'FALSTART (%d ms przed zgaszeniem)',
     penDT = 'Kara: drive-through (%d okr.)',
@@ -379,6 +380,7 @@ L.TEXT = {
     lights = 'START',
     late = 'You were not in your slot when the lights came on – penalty',
     aborted = 'START ABORTED – extra formation lap',
+    skipped = 'Formation lap skipped – stop in your grid slot',
     reaction = 'Reaction: %d ms',
     jump = 'JUMP START (%d ms before lights out)',
     penDT = 'Penalty: drive-through (%d laps)',
@@ -633,6 +635,7 @@ local sendPhase = ac.OnlineEvent({
 end, ac.SharedNamespace.ServerScript)
 
 local pitReleased = false
+local skipPending = false -- „pomiń formujące” kliknięte, zanim u tego kierowcy ruszył wyścig
 local startRaceProgress -- zdefiniowane niżej
 local raceProg = {} -- [carIndex] = { prev = splajn, dist = przejechane m od zgaszenia świateł }
 local function broadcastPhase()
@@ -749,6 +752,10 @@ local function startFormation(extraLap)
   auto.readySince, auto.firstReadyAt, auto.since = nil, nil, gameS()
   me.formationStartAt = gameS()
   pushStatus(true) -- wszyscy od razu meldują nowy stan (stare statusy przestają się liczyć)
+  if skipPending and not extraLap then
+    me.traveled = sim.trackLengthM > 0 and sim.trackLengthM or 4000
+  end
+  skipPending = false
   if extraLap then
     notify(T('aborted'), 8, rgbm.colors.yellow)
     -- kara za przestrzelenie z przerwanego startu przepada, falstart też
@@ -838,7 +845,14 @@ onCommand = function(sender, data)
   elseif data.cmd == L.CMD.PIT_RELEASE then
     pitReleased = true
   elseif data.cmd == L.CMD.SKIP_FORMATION then
-    if phase == L.P.FORMATION then me.traveled = sim.trackLengthM end
+    -- przed startem wyścigu (odliczanie gry) zapamiętaj i zastosuj, gdy ruszy formujące
+    if phase == L.P.FORMATION then
+      me.traveled = sim.trackLengthM > 0 and sim.trackLengthM or 4000
+      notify(T('skipped'), 6, rgbm.colors.yellow)
+    elseif phase == L.P.GRID or phase == L.P.IDLE then
+      skipPending = true
+      notify(T('skipped'), 6, rgbm.colors.yellow)
+    end
   end
 end
 
@@ -1043,6 +1057,17 @@ local function updateLights()
     -- nie stoi na swoim polu (jedzie, stoi przed nim, za nim albo obok) = kara
     local st0 = me.state
     local onSlot = st0 == L.S.IN_SLOT or st0 == L.S.DNS or st0 == L.S.OVERSHOOT_PEN
+    -- stoi dokładnie na swoim polu, choć stan tego nie pokazał (np. formujące pominięte) = na polu
+    local s = slots[0]
+    if not onSlot and s and not me.pitStart and me.wasStopped and st0 ~= L.S.PIT_OUT then
+      local trackLen = sim.trackLengthM > 0 and sim.trackLengthM or 4000
+      local long, lat = L.slotOffset(myCar.position, s.pos, s.look, s.side)
+      local d = L.signedSlotDistance(myCar.splinePosition, s.spline, trackLen, long)
+      if math.abs(d) <= cfg.GRID_TOLERANCE_M and math.abs(lat) <= cfg.LATERAL_TOLERANCE_M then
+        onSlot = true
+        me.state = L.S.IN_SLOT
+      end
+    end
     if st0 == L.S.SHORT or st0 == L.S.OVERSHOOT then me.dist = me.long
     elseif st0 == L.S.WRONG_LANE then me.dist = math.abs(me.lat or 0) end
     if (not me.pitStart and slots[0] and (not onSlot or not me.wasStopped)) or st0 == L.S.PIT_OUT then
