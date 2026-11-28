@@ -140,5 +140,8 @@ check('stop & go 10 s', L.parsePenalty('STOP_GO', cfg).param == 10)
 check('stop & go surowszy niż DT', L.stronger(L.parsePenalty('DT', cfg), L.parsePenalty('SG', cfg)).kind == 'sg')
 check('kara za spóźnienie domyślnie DT', L.parsePenalty(cfg.LATE_PENALTY, cfg).kind == 'dt')
 
+check('segmenty: P', L.SEGMENTS.P == 'abefg')
+check('segmenty: wszystkie cyfry', (function() for d = 0, 9 do if not L.SEGMENTS[tostring(d)] then return false end end return true end)())
+
 print(string.format('logika: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

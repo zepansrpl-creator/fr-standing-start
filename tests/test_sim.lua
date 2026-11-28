@@ -99,7 +99,12 @@ local function setup(serverCfg)
     forceUserBrakesFor = function() env.brakes = env.brakes + 1 end,
     raycastTrack = function() return 2.0 end,
   }
-  render = setmetatable({ BlendMode = {}, DepthMode = {}, CullMode = {} },
+  render = setmetatable({ BlendMode = {}, DepthMode = {}, CullMode = {},
+    quad = function(_, _, _, _, col)
+      env.quads = (env.quads or 0) + 1
+      if col then env.maxCol = math.max(env.maxCol or 0, col.r, col.g, col.b) end
+    end,
+    debugText = function() env.debugText = true end },
     { __index = function() return function() end end })
   ui = setmetatable({
     Icons = {}, OnlineExtraFlags = { None = 0, Admin = 1, Tool = 2 }, WindowFlags = { None = 0 },
@@ -784,6 +789,28 @@ end
 check('S37: komunikat przed światłami', seen5)
 check('S37: brak napisu „Czekaj na światła”', not seenWait)
 ui.dwriteDrawText = old37
+
+---------------------------------------------------------------- scenariusz 38: numer pola rysowany w świecie gry; zwykłe kolory na potrójnych ekranach
+setup(nil)
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+env.quads, env.maxCol, env.debugText = 0, 0, false
+frame(50)
+check('S38: numer pola bez nakładanego tekstu', not env.debugText)
+check('S38: pole, brama i numer narysowane', env.quads >= 19)
+check('S38: świecące kolory na zwykłym ekranie', env.maxCol > 1)
+setup(nil)
+env.sim.isTripleMode = true
+dofile('fr_standing_start.lua') -- ponowne wczytanie z wykrytymi potrójnymi ekranami
+for _ = 1, 5 do frame(50) end
+env.sim.timeToSessionStart = 0; env.sim.currentSessionTime = 0
+frame(50)
+driveFormation(0.0)
+env.quads, env.maxCol = 0, 0
+frame(50)
+check('S38: na potrójnych ekranach zwykłe kolory (bez świecenia)', env.quads > 0 and env.maxCol <= 1)
 
 print(string.format('symulacja: pass=%d fail=%d', pass, fail))
 os.exit(fail == 0 and 0 or 1)

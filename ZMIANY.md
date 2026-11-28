@@ -1,5 +1,13 @@
 # Zmiany
 
+## 0.2.6
+
+### Nowe funkcje
+- Opcja „Zwykłe kolory pola” w oknie ustawień kierowcy – włączona automatycznie na potrójnych ekranach i w VR.
+
+### Poprawki
+- Numer pola nad bramą rysowany w świecie gry (zamiast nakładanego tekstu), więc na potrójnych ekranach jest biały i we właściwym miejscu.
+
 ## 0.2.5
 
 ### Poprawki

@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.5'
+local VERSION = '0.2.6'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -150,6 +150,13 @@ function L.isArrivedState(st)
   return st == L.S.IN_SLOT or st == L.S.SHORT or st == L.S.OVERSHOOT or st == L.S.OVERSHOOT_PEN
     or st == L.S.WRONG_LANE
 end
+
+-- Segmenty wyświetlacza 7-segmentowego (a – góra, b – prawy górny, c – prawy dolny, d – dół,
+-- e – lewy dolny, f – lewy górny, g – środek) dla cyfr i litery P.
+L.SEGMENTS = {
+  ['0'] = 'abcdef', ['1'] = 'bc', ['2'] = 'abdeg', ['3'] = 'abcdg', ['4'] = 'bcfg', ['5'] = 'acdfg',
+  ['6'] = 'acdefg', ['7'] = 'abc', ['8'] = 'abcdefg', ['9'] = 'abcdfg', P = 'abefg',
+}
 
 -- Czy meldunek auta oznacza, że procedura startu (formujące / ustawianie) jeszcze trwa.
 function L.isProcedureState(st)
@@ -350,6 +357,7 @@ L.TEXT = {
     setPosY = 'Pionowo',
     setScale = 'Wielkość',
     setHint = 'Możesz też przeciągnąć podgląd myszką.',
+    setPlain = 'Zwykłe kolory pola (potrójne ekrany / VR)',
     setReset = 'Przywróć domyślne',
     preview = 'P1 · 12.3 m (podgląd)',
     chatHelp = 'Czat: !frss swiatla / !frss przerwij / !frss pomin',
@@ -445,6 +453,7 @@ L.TEXT = {
     setPosY = 'Vertical',
     setScale = 'Size',
     setHint = 'You can also drag the preview with the mouse.',
+    setPlain = 'Plain slot colours (triple screens / VR)',
     setReset = 'Reset to defaults',
     preview = 'P1 · 12.3 m (preview)',
     chatHelp = 'Chat: !frss lights / !frss abort / !frss skip',
@@ -1325,10 +1334,49 @@ local function slotColor()
   return COL_IDLE
 end
 
+-- Zwykłe kolory (bez świecenia): domyślnie przy potrójnych ekranach i VR, do zmiany w ustawieniach.
+local vis = { plain = (sim.isTripleMode or sim.isVRMode) and true or false }
+do
+  local ok, st = pcall(ac.storage, { plain = vis.plain }, 'frss_vis_')
+  if ok and st then vis = st end
+end
+
+local function C(col)
+  if not vis.plain then return col end
+  return rgbm(math.min(col.r, 1), math.min(col.g, 1), math.min(col.b, 1), math.max(col.mult, 0.85))
+end
+
 -- prostokątny pasek na asfalcie od punktu a do b o szerokości w
 local function band(a, b, dirSide, w, col)
   local h = dirSide * (w / 2)
-  render.quad(a - h, a + h, b + h, b - h, col)
+  render.quad(a - h, a + h, b + h, b - h, C(col))
+end
+
+-- napis z segmentów (np. „P3”) w świecie gry, w płaszczyźnie nad bramą;
+-- origin – środek dolnej krawędzi napisu, right – kierunek „w prawo” widziany przez kierowcę
+local function segText(text, origin, right, up, height, col)
+  local w, th = height * 0.55, height * 0.12
+  local gap = height * 0.25
+  local total = #text * w + (#text - 1) * gap
+  local x = -total / 2
+  for ch in text:gmatch('.') do
+    local segs = L.SEGMENTS[ch]
+    if segs then
+      local o = origin + right * x
+      local H, M = up * height, up * (height / 2)
+      local R = right * w
+      local lines = {
+        a = { o + H, o + H + R }, b = { o + R + M, o + R + H }, c = { o + R, o + R + M },
+        d = { o, o + R }, e = { o, o + M }, f = { o + M, o + H }, g = { o + M, o + M + R },
+      }
+      for sgm in segs:gmatch('.') do
+        local ln = lines[sgm]
+        local dir = (sgm == 'a' or sgm == 'd' or sgm == 'g') and up or right
+        band(ln[1], ln[2], dir, th, col)
+      end
+    end
+    x = x + w + gap
+  end
 end
 
 local function bright(col, k)
@@ -1359,7 +1407,7 @@ function script.draw3D()
   end
   local edge = bright(col, 2)
   -- wypełnienie pola
-  render.quad(base + b + l, base + b + r, base + f + r, base + f + l, col)
+  render.quad(base + b + l, base + b + r, base + f + r, base + f + l, C(col))
   -- gruba obwódka (25 cm)
   local t = 0.08
   band(base + b + l, base + f + l, side, t, edge)
@@ -1384,7 +1432,14 @@ function script.draw3D()
     local to = base + look * L.clamp(me.long or 0, -halfL, halfL)
     band(from, to, look, 0.1, rgbm(4, 3, 0.2, 1))
   end
-  pcall(render.debugText, base + look * halfL + vec3(0, 2.0, 0), 'P' .. tostring(s.gridPos), rgbm(4, 4, 4, 1), 3.5)
+  -- numer pola nad bramą, rysowany w świecie gry (działa też na potrójnych ekranach)
+  local right = side
+  local wh = myCar.wheels
+  if wh and wh[0] and wh[1] then
+    local rv = vec3(wh[1].position.x - wh[0].position.x, 0, wh[1].position.z - wh[0].position.z)
+    if rv.x * rv.x + rv.z * rv.z > 0.01 then right = rv:normalize() end
+  end
+  segText('P' .. tostring(s.gridPos), base + f + up + vec3(0, 0.25, 0), right, vec3(0, 1, 0), 0.6, rgbm(4, 4, 4, 1))
   render.setCullMode(render.CullMode.Back)
   render.setDepthMode(render.DepthMode.Normal)
   render.setBlendMode(render.BlendMode.Opaque)
@@ -1640,6 +1695,7 @@ ui.registerOnlineExtra(ui.Icons.TrafficLight, L.text('PL', 'adminTitle'),
 local function settingsUI()
   settingsSeenAt = gameS()
   if ui.button(T('setLang', lang)) then lang = lang == 'PL' and 'EN' or 'PL' end
+  if ui.checkbox(T('setPlain'), vis.plain) then vis.plain = not vis.plain end
   ui.separator()
   local v
   v = ui.slider('##x', hud.x * 100, 5, 95, T('setPosX') .. ': %.0f%%')
@@ -1657,6 +1713,6 @@ end
 
 ui.registerOnlineExtra(ui.Icons.Settings, L.text('PL', 'settingsTitle'),
   function() return true end, settingsUI, nil,
-  ui.OnlineExtraFlags.Tool, ui.WindowFlags.None, vec2(360, 220))
+  ui.OnlineExtraFlags.Tool, ui.WindowFlags.None, vec2(380, 250))
 
 log('v' .. VERSION .. ' start')

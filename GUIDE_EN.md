@@ -61,7 +61,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.5/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.6/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -72,7 +72,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.5`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.6`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -124,6 +124,7 @@ Chat commands (admin only, hidden from other drivers):
 - **Nothing to install.** You only need CSP.
 - In the CSP Chat app, under online extras, open **"FR Standing Start – settings"** to:
   - switch the language (EN/PL),
+  - "Plain slot colours" – no glow, for triple screens and VR (switched on automatically there),
   - move and resize the distance messages, with sliders or by dragging the preview with the mouse. Your settings are saved on your PC.
 - Drive to the glowing box with the gate, stop with the front of the car on the white line, and wait for the lights.
 

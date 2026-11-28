@@ -43,7 +43,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.5/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.6/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -56,7 +56,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.5`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.6`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -119,6 +119,7 @@ Komendy na czacie (działają tylko dla admina, nie są widoczne dla innych):
 
 Każdy kierowca ma w tym samym menu okno **„FR Standing Start – ustawienia”**:
 - zmiana języka PL/EN,
+- „Zwykłe kolory pola” – bez świecenia, dla potrójnych ekranów i VR (włączane tam automatycznie),
 - przesuwanie napisów z odległością (suwaki albo przeciągnięcie podglądu myszką) i ich wielkość; zapamiętywane na komputerze kierowcy.
 
 Po karze drive-through kierowca widzi na ekranie, ile okrążeń zostało na jej odbycie; odbycie (przejazd przez aleję **bez zatrzymania**) jest potwierdzane na ekranie i na czacie; pitstop w boksie kary nie odbywa.
