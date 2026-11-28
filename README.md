@@ -43,7 +43,7 @@ Gdy kierowca ma dwie kary (np. przestrzelenie i falstart), dostaje jedną, surow
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.7/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.8/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = PL
@@ -56,7 +56,7 @@ PENALTY_LAPS = 3
 AUTO_LIGHTS = 0
 ```
 
-   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.7`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
+   Sekcję `[SCRIPT_...]` wpisz dokładnie tak, z trzema kropkami – CSP sam nada jej numer (np. SCRIPT_3). Adres zawiera numer wersji (`v0.2.8`), więc zmiany w repo nie podmienią skryptu w trakcie wyścigu. Nową wersję włączasz, zmieniając numer w adresie.
 
 2. **Start Rule** ustaw na **„Car is Locked Until Start”**, żeby nikt nie dostał kary gry za ruszenie na okrążenie formujące.
 3. **Wymagana wersja CSP:** zostaw swoją (3749) albo co najmniej 0.2.x.
@@ -67,7 +67,7 @@ AUTO_LIGHTS = 0
 
 | Klucz | Domyślnie | Opis |
 |---|---|---|
-| `LANGUAGE` | `PL` | `PL` albo `EN`. Kierowca może przełączyć u siebie. |
+| `LANGUAGE` | `EN` | `EN` albo `PL`. Kierowca może przełączyć u siebie. Polski serwer musi mieć `LANGUAGE = PL`. |
 | `FORMATION_SPEED_KMH` | `80` | limit na formującym (0 = brak limitu) |
 | `APPROACH_ZONE_M` | `300` | od jakiej odległości pokazujemy pole |
 | `GRID_TOLERANCE_M` | `0.5` | tolerancja ustawienia |
@@ -181,7 +181,7 @@ Te rzeczy działają w testach na atrapie, ale ich zachowanie w grze trzeba potw
 
 ## English summary
 
-FR Standing Start is a CSP online script that adds a standing start after a formation lap. It records each car's grid slot at the game's race start (which begins the formation lap), enforces a speed limit, shows a distance countdown and a marked grid box on the tarmac, penalises overshooting the slot, runs synchronised start lights (admin button or automatic when everyone is stopped) and detects jump starts. Messages are available in Polish and English (`LANGUAGE = EN`, drivers can switch locally). Configure it with the `[FR_STANDING_START]` section shown above.
+FR Standing Start is a CSP online script that adds a standing start after a formation lap. It records each car's grid slot at the game's race start (which begins the formation lap), enforces a speed limit, shows a distance countdown and a marked grid box on the tarmac, penalises overshooting the slot, runs synchronised start lights (admin button or automatic when everyone is stopped) and detects jump starts. Messages are available in English (default) and Polish (`LANGUAGE = PL`, drivers can switch locally). Configure it with the `[FR_STANDING_START]` section shown above.
 
 ## Licencja
 

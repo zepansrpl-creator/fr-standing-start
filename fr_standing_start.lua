@@ -5,7 +5,7 @@
 -- Licencja MIT (c) 2026 Maciej Szczepaniak – github.com/zepansrpl-creator/fr-standing-start
 -- Konfiguracja: patrz README.md (sekcja [FR_STANDING_START] w CSP Extra Options serwera).
 
-local VERSION = '0.2.7'
+local VERSION = '0.2.8'
 
 -------------------------------------------------------------------------------
 -- 1. Czysta logika (bez API gry) – testowana w tests/test_logic.lua
@@ -17,7 +17,7 @@ L.VERSION = VERSION
 
 -- Domyślne ustawienia. Każde można nadpisać w sekcji [FR_STANDING_START].
 L.DEFAULTS = {
-  LANGUAGE = 'PL',             -- PL albo EN (kierowca może przełączyć u siebie)
+  LANGUAGE = 'EN',             -- EN albo PL (kierowca może przełączyć u siebie)
   FORMATION_SPEED_KMH = 80,    -- limit prędkości na okrążeniu formującym (0 = brak)
   APPROACH_ZONE_M = 300,       -- od jakiej odległości pokazujemy pole i odliczanie metrów
   GRID_TOLERANCE_M = 0.5,      -- tyle można stanąć przed/za linią pola bez uwag
@@ -256,7 +256,7 @@ function L.readConfig(getter)
     if type(v) == 'string' then val = tostring(val) end
     cfg[k] = val
   end
-  cfg.LANGUAGE = string.upper(cfg.LANGUAGE) == 'EN' and 'EN' or 'PL'
+  cfg.LANGUAGE = string.upper(cfg.LANGUAGE) == 'PL' and 'PL' or 'EN'
   cfg.LIGHTS_COUNT = L.clamp(math.floor(cfg.LIGHTS_COUNT), 1, 10)
   if cfg.HOLD_MAX_MS < cfg.HOLD_MIN_MS then cfg.HOLD_MAX_MS = cfg.HOLD_MIN_MS end
   if cfg.GRID_WARNING_M < cfg.GRID_TOLERANCE_M then cfg.GRID_WARNING_M = cfg.GRID_TOLERANCE_M end
@@ -708,7 +708,7 @@ local function freezeSlots()
   end
   local s = slots[0]
   if s then
-    log(string.format('pole P%d zapisane, spline %.4f', s.gridPos, s.spline))
+    log(string.format('slot P%d saved, spline %.4f', s.gridPos, s.spline))
   end
 end
 
@@ -763,7 +763,7 @@ local function startFormation(extraLap)
     me.pardoned = false
   end
   broadcastPhase()
-  log('faza: formujące' .. (extraLap and ' (dodatkowe)' or ''))
+  log('phase: formation lap' .. (extraLap and ' (extra)' or ''))
 end
 
 local function startLights(t0, hold)
@@ -774,7 +774,7 @@ local function startLights(t0, hold)
   local _, _, outAt = L.lightsState(clockMs(), t0, cfg.LIGHTS_COUNT, cfg.LIGHTS_INTERVAL_MS, hold)
   lightsOutAt = outAt
   broadcastPhase()
-  log(string.format('światła: start %.0f, zgaszenie %.0f', t0, outAt))
+  log(string.format('lights: start %.0f, out %.0f', t0, outAt))
 end
 
 local function finishStart()
@@ -815,7 +815,7 @@ local function finishStart()
   me.state = me.pitWait and L.S.PIT_START or L.S.RACING
   pushStatus(true)
   broadcastPhase()
-  log('faza: wyścig')
+  log('phase: race')
 end
 
 onCommand = function(sender, data)
@@ -894,7 +894,7 @@ local function checkLateJoin()
   end
   notify(T('pitStartMsg'), 10, rgbm.colors.yellow)
   pushStatus(true)
-  log('dołączenie w trakcie startu: start z boksu')
+  log('joined during the start procedure: pit start')
 end
 
 local function adminSend(cmd, target)
@@ -912,7 +912,7 @@ end
 ac.onOnlineWelcome(function(message, config)
   cfg = L.readConfig(function(k, v) return config:get('FR_STANDING_START', k, v) end)
   lang = cfg.LANGUAGE
-  log('v' .. VERSION .. ' wczytany, język ' .. lang)
+  log('v' .. VERSION .. ' loaded, language ' .. lang)
 end)
 
 ac.onSessionStart(function(index, restarted)
@@ -941,7 +941,7 @@ ac.onChatMessage(function(message, senderCarIndex)
   if senderCarIndex == -1 and msg:lower():find('you are now admin', 1, true) then
     adminByChat = true
     pcall(ac.checkAdminPrivileges)
-    log('rozpoznano admina po komendzie /admin')
+    log('admin detected from the /admin command')
     return false
   end
   -- czas reakcji widzi tylko jego autor
@@ -1092,7 +1092,7 @@ local function updateLights()
     end
     if L.isJumpStart(moved, cfg) then
       me.jumpMs = math.max(0, math.floor(lightsOutAt - clockMs()))
-      log('falstart ' .. me.jumpMs .. ' ms')
+      log('jump start ' .. me.jumpMs .. ' ms')
     end
   end
   if out then finishStart() end
@@ -1288,14 +1288,14 @@ end
 
 local function debugValues()
   -- podgląd w aplikacji „Lua Debug” CSP (pomaga przy testach)
-  ac.debug('FRSS wersja', VERSION)
+  ac.debug('FRSS version', VERSION)
   ac.debug('FRSS admin', isAdmin())
-  ac.debug('FRSS faza', phase)
-  ac.debug('FRSS stan', me.state)
-  ac.debug('FRSS przejechane m', math.floor(me.traveled or 0))
-  ac.debug('FRSS do pola m', me.dist and string.format('%.2f', me.dist) or '-')
-  ac.debug('FRSS pole P', mySlotNumber())
-  ac.debug('FRSS automat', auto.info or '-')
+  ac.debug('FRSS phase', phase)
+  ac.debug('FRSS state', me.state)
+  ac.debug('FRSS travelled m', math.floor(me.traveled or 0))
+  ac.debug('FRSS to slot m', me.dist and string.format('%.2f', me.dist) or '-')
+  ac.debug('FRSS slot P', mySlotNumber())
+  ac.debug('FRSS auto lights', auto.info or '-')
 end
 
 function script.update(dt)

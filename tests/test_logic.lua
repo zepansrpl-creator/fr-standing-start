@@ -102,6 +102,19 @@ local c2 = L.readConfig(function(k, v)
   if k == 'LIGHTS_COUNT' then return 50 end
 end)
 check('język EN', c2.LANGUAGE == 'EN')
+check('domyślny język EN', L.readConfig(function(_, v) return v end).LANGUAGE == 'EN')
+check('język PL z serwera', L.readConfig(function(k, v) if k == 'LANGUAGE' then return 'pl' end return v end).LANGUAGE == 'PL')
+check('nieznany język = EN', L.readConfig(function(k, v) if k == 'LANGUAGE' then return 'de' end return v end).LANGUAGE == 'EN')
+-- każdy tekst ma wersję w obu językach (także tabele: nazwy faz i stanów)
+local function sameKeys(a, b)
+  for k, v in pairs(a) do
+    if b[k] == nil or type(b[k]) ~= type(v) then return false, k end
+    if type(v) == 'table' and not sameKeys(v, b[k]) then return false, k end
+  end
+  return true
+end
+check('wszystkie teksty PL mają EN', sameKeys(L.TEXT.PL, L.TEXT.EN))
+check('wszystkie teksty EN mają PL', sameKeys(L.TEXT.EN, L.TEXT.PL))
 check('liczba z tekstu', c2.FORMATION_SPEED_KMH == 100)
 check('HOLD_MAX >= HOLD_MIN', c2.HOLD_MAX_MS >= c2.HOLD_MIN_MS)
 check('max 10 świateł', c2.LIGHTS_COUNT == 10)

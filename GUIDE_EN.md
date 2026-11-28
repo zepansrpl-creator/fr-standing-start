@@ -61,7 +61,7 @@ Open your event (Custom Race, Race Weekend or Championship) and go to the field 
 
 ```ini
 [SCRIPT_...]
-SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.7/fr_standing_start.lua"
+SCRIPT = "https://raw.githubusercontent.com/zepansrpl-creator/fr-standing-start/v0.2.8/fr_standing_start.lua"
 
 [FR_STANDING_START]
 LANGUAGE = EN
@@ -72,7 +72,7 @@ AUTO_LIGHTS = 0
 ```
 
 - Type `[SCRIPT_...]` **exactly like this, with three dots**. CSP numbers the section itself. A custom name such as `[SCRIPT_MY_START]` will **not** be loaded.
-- The address contains a version number (`v0.2.7`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
+- The address contains a version number (`v0.2.8`), so your races always use that exact version. To update, change the number. The list of versions is on the [Releases page](https://github.com/zepansrpl-creator/fr-standing-start/releases).
 
 ### 2. Set the start rule
 
@@ -136,7 +136,7 @@ All settings go into the `[FR_STANDING_START]` section. Anything you leave out u
 
 | Key | Default | Description |
 |---|---|---|
-| `LANGUAGE` | `PL` | `EN` or `PL` (drivers can switch locally) |
+| `LANGUAGE` | `EN` | `EN` or `PL` (drivers can switch locally) |
 | `FORMATION_SPEED_KMH` | `80` | speed limit on the formation lap, `0` = no limit |
 | `APPROACH_ZONE_M` | `300` | distance from which the slot and countdown are shown |
 | `GRID_TOLERANCE_M` | `0.5` | allowed distance from the slot line |

@@ -127,6 +127,7 @@ local function setup(serverCfg)
   serverCfg = serverCfg or {}
   if serverCfg.HOLD_MIN_MS == nil then serverCfg.HOLD_MIN_MS = 1000; serverCfg.HOLD_MAX_MS = 1000 end
   if serverCfg.LIGHTS_LEAD_MS == nil then serverCfg.LIGHTS_LEAD_MS = 3000 end
+  if serverCfg.LANGUAGE == nil then serverCfg.LANGUAGE = 'PL' end -- etykiety przycisków w testach po polsku
   do
     env.welcome('', { get = function(_, section, key, def)
       if section == 'FR_STANDING_START' and serverCfg[key] ~= nil then return serverCfg[key] end

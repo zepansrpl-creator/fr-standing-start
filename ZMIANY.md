@@ -1,5 +1,13 @@
 # Zmiany
 
+## 0.2.8
+
+### Nowe funkcje
+- Domyślny język to angielski. Polski włącza `LANGUAGE = PL` w ustawieniach serwera; kierowca nadal może przełączyć język u siebie.
+
+### Poprawki
+- Wpisy w logu CSP i podgląd debugowania po angielsku.
+
 ## 0.2.7
 
 ### Poprawki
